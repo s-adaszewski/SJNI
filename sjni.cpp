@@ -122,10 +122,10 @@ int main(int argc, char *argv[])
 
 	sjniObj out = sjniObj(System.sfld("out", "Ljava/io/PrintStream;"));
 
-	jobject s = e.jenv()->NewStringUTF("DUPA CIPA CHUJ!");
+	jobject s = e.jenv()->NewStringUTF("foo bar bar!");
 	e.jenv()->CallVoidMethod(out.jobj(), println.jmet(), s);
 
-	sjniStr s1(e.jenv(), "Dupa kurwa chuj");
+	sjniStr s1(e.jenv(), "foo foo bar");
 	sjniStr s2(s1);
 	printf("s2.jobj() == 0x%08X\n", s2.jobj());
 	(out << "println" << s1).callV();
