@@ -1,3 +1,32 @@
+/*
+
+Copyright (c) 2010, Stanislaw Adaszewski (s.adaszewski@aster.pl)
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the <organization> nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+*/
+
 #ifndef _SJNI_H_
 #define _SJNI_H_
 
@@ -11,6 +40,7 @@ class sjniCls;
 class sjniCall;
 class sjniObj;
 class sjniPkg;
+class sjniAry;
 
 class sjniMet
 {
@@ -211,6 +241,7 @@ public:
 	// sjniCall& operator<< (jobject, const char *clz);
 	sjniCall& arg(jobject aObj, const char *clz) { append2sig("L"); append2sig(clz); append2sig(";"); append2args()->l = aObj; return *this; }
 	sjniCall& operator<< (const sjniObj &aObj);
+	sjniCall& operator<< (const sjniAry &aAry);
 
 	void callV() { prepMethodID("V"); env->CallVoidMethodA(obj, methodID, args); }
 	jboolean callZ() { prepMethodID("Z"); env->CallBooleanMethodA(obj, methodID, args); }
@@ -506,6 +537,7 @@ public:
 
 	const char *getClsName() const { return clsName; }
 	jobject jobj() const { return obj; }
+	JNIEnv* jenv() const { return env; }
 
 protected:
 	JNIEnv *env;
@@ -596,6 +628,147 @@ public:
 		// env->DeleteLocalRef(cls);
 		// env->DeleteLocalRef(obj);
 	}
+};
+
+class sjniAry//: public sjniObj
+{
+public:
+	sjniAry(const sjniObj &aObj): curIdx(0) // obj(aObj)
+	{
+		env = aObj.jenv();
+		obj = env->NewLocalRef(aObj.jobj());
+	}
+
+	sjniAry(JNIEnv *aEnv, int len, const char *sig, const char *psig = 0, ...): curIdx(0)
+	{
+		va_list ap;
+		va_start(ap, psig);
+		create(aEnv, len, sig, psig, ap);
+		va_end(ap);
+	}
+
+	sjniAry(JNIEnv *aEnv, int len, const char *sig, const char *psig, va_list ap): curIdx(0)
+	{
+		create(aEnv, len, sig, psig, ap);
+	}
+
+private:
+	void create(JNIEnv *aEnv, int len, const char *sig, const char *psig, va_list ap)
+	{
+		env = aEnv;
+		// jobject t;
+		switch(*sig)
+		{
+		case 'Z':
+			obj = env->NewBooleanArray(len);
+			break;
+		case 'B':
+			obj = env->NewByteArray(len);
+			break;
+		case 'C':
+			obj = env->NewCharArray(len);
+			break;
+		case 'S':
+			obj = env->NewShortArray(len);
+			break;
+		case 'I':
+			obj = env->NewIntArray(len);
+			break;
+		case 'J':
+			obj = env->NewLongArray(len);
+			break;
+		case 'F':
+			obj = env->NewFloatArray(len);
+			break;
+		case 'D':
+			obj = env->NewDoubleArray(len);
+			break;
+		case 'L':
+			{
+				char *buf = strdup(sig + 1);
+				buf[strlen(buf)-1] = 0;
+				jclass cls = env->FindClass(buf);
+				jmethodID ctorID = env->GetMethodID(cls, "<init>", psig);
+				// va_list ap;
+				// va_start (ap, psig);
+				jobject init = env->NewObjectV(cls, ctorID, ap);
+				// va_end(ap);
+				obj = env->NewObjectArray(len, cls, init);
+
+				char *buf2 = (char*) calloc(strlen(sig) + 2, 1);
+				strcat(buf2, "[");
+				strcat(buf2, sig);
+				arySig = buf2;
+
+				// obj = sjniObj(aEnv, buf2, cls, t);
+
+				env->DeleteLocalRef(init);
+				env->DeleteLocalRef(cls);
+				free(buf);
+				// free(buf2);
+			}
+			return;
+		}
+		{
+			// char buf[3];
+			arySig = (char*) malloc(3);
+			arySig[0] = '[';
+			arySig[1] = *sig;
+			arySig[2] = 0;
+			// jclass cls = env->FindClass(buf);
+			// obj = sjniObj(aEnv, buf, cls, t);
+		}
+	}
+
+public:
+	~sjniAry()
+	{
+		free(arySig);
+		env->DeleteLocalRef(obj);
+	}
+
+	jboolean getZ(int idx) { jboolean buf; env->GetBooleanArrayRegion((jbooleanArray) obj, idx, 1, &buf); return buf; }
+	jbyte getB(int idx) { jbyte buf; env->GetByteArrayRegion((jbyteArray) obj, idx, 1, &buf); return buf; }
+	jchar getC(int idx) { jchar buf; env->GetCharArrayRegion((jcharArray) obj, idx, 1, &buf); return buf; }
+	jshort getS(int idx) { jshort buf; env->GetShortArrayRegion((jshortArray) obj, idx, 1, &buf); return buf; }
+	jint getI(int idx) { jint buf; env->GetIntArrayRegion((jintArray) obj, idx, 1, &buf); return buf; }
+	jlong getL(int idx) { jlong buf; env->GetLongArrayRegion((jlongArray) obj, idx, 1, &buf); return buf; }
+	jfloat getF(int idx) { jfloat buf; env->GetFloatArrayRegion((jfloatArray) obj, idx, 1, &buf); return buf; }
+	jdouble getD(int idx) { jdouble buf; env->GetDoubleArrayRegion((jdoubleArray) obj, idx, 1, &buf); return buf; }
+	jobject getO(int idx) { return env->GetObjectArrayElement((jobjectArray) obj, idx); } // , 1, &buf); return buf; }
+
+	void set(int idx, jboolean z) { env->SetBooleanArrayRegion((jbooleanArray) obj, idx, 1, &z); }
+	void set(int idx, jbyte b) { env->SetByteArrayRegion((jbyteArray) obj, idx, 1, &b); }
+	void set(int idx, jchar c) { env->SetCharArrayRegion((jcharArray) obj, idx, 1, &c); }
+	void set(int idx, jshort s) { env->SetShortArrayRegion((jshortArray) obj, idx, 1, &s); }
+	void set(int idx, jint i) { env->SetIntArrayRegion((jintArray) obj, idx, 1, &i); }
+	void set(int idx, jlong l) { env->SetLongArrayRegion((jlongArray) obj, idx, 1, &l); }
+	void set(int idx, jfloat f) { env->SetFloatArrayRegion((jfloatArray) obj, idx, 1, &f); }
+	void set(int idx, jdouble d) { env->SetDoubleArrayRegion((jdoubleArray) obj, idx, 1, &d); }
+	void set(int idx, jobject o) { env->SetObjectArrayElement((jobjectArray) obj, idx, o); }
+
+	sjniAry& operator<< (jboolean z) { set(curIdx, z); curIdx++; return *this; }
+	sjniAry& operator<< (jbyte b) { set(curIdx, b); curIdx++; return *this; }
+	sjniAry& operator<< (jchar c) { set(curIdx, c); curIdx++; return *this; }
+	sjniAry& operator<< (jshort s) { set(curIdx, s); curIdx++; return *this; }
+	sjniAry& operator<< (jint i) { set(curIdx, i); curIdx++; return *this; }
+	sjniAry& operator<< (jlong l) { set(curIdx, l); curIdx++; return *this; }
+	sjniAry& operator<< (jfloat f) { set(curIdx, f); curIdx++; return *this; }
+	sjniAry& operator<< (jdouble d) { set(curIdx, d); curIdx++; return *this; }
+	sjniAry& operator<< (jobject o) { set(curIdx, o); curIdx++; return *this; }
+
+	void setCurIdx(int idx) { curIdx = idx; }
+
+	jsize len() { return env->GetArrayLength((jarray) obj); }
+
+	jobject jobj() const { return obj; }
+	const char* sig() const { return arySig; }
+
+private:
+	JNIEnv *env;
+	jobject obj;
+	char *arySig;
+	jint curIdx;
 };
 
 class sjniPkg
@@ -702,7 +875,24 @@ public:
 		return sjniStr(env, s);
 	}
 
-	sjniObj nnew(const char *clz, const char *sig, ...);
+	sjniAry ary(int len, const char *sig, const char *psig = 0, ...)
+	{
+		va_list ap;
+		va_start(ap, psig);
+		sjniAry a = sjniAry(env, len, sig, psig, ap);
+		va_end(ap);
+		return a;
+	}
+
+	sjniObj nnew(const char *clz, const char *sig, ...)
+	{
+		sjniCls c = cls(clz);
+		va_list ap;
+		va_start(ap, sig);
+		sjniObj o = c.nnew(sig, ap);
+		va_end(ap);
+		return o;
+	}
 
 	JavaVM *jvm() const { return vm; }
 	JNIEnv* jenv() const { return env; }

@@ -1,3 +1,32 @@
+/*
+
+Copyright (c) 2010, Stanislaw Adaszewski (s.adaszewski@aster.pl)
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the <organization> nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+*/
+
 #include "sjni.h"
 
 #include <unistd.h>
@@ -71,7 +100,14 @@ sjniCall& sjniCall::operator<< (const sjniObj &aObj)
 	return *this;
 }
 
-/* int main(int argc, char *argv[])
+sjniCall& sjniCall::operator<< (const sjniAry &aAry)
+{
+	append2sig(aAry.sig());
+	append2args()->l = aAry.jobj();
+	return *this;
+}
+
+int main(int argc, char *argv[])
 {
 	sjniEnv e;
 	sjniCls System = e.cls("java/lang/System");
@@ -95,13 +131,30 @@ sjniCall& sjniCall::operator<< (const sjniObj &aObj)
 	(out << "println" << s1).callV();
 	(out << "flush").callV();
 
+	sjniAry charAry(e.ary(5, "C"));
+	charAry.set(0, (jchar) '1');
+	charAry.set(1, (jchar) '1');
+	charAry.set(2, (jchar) '2');
+	charAry.set(3, (jchar) '3');
+	charAry.set(4, (jchar) '5');
+	(out << "println" << charAry).callV();
+	(out << "flush").callV();
+
+	printf("charAry.len() == %d\n", charAry.len());
+
+#define C (jchar)
+
+	charAry.setCurIdx(0);
+	charAry << C'7' << C'8' << C'9' << C'a' << C'b';
+	(out << "println" << charAry).callV();
+
 	printf("done calling stufff...\n");
 
 	e.destroy();
 	_exit(0);
-} */
+}
 
-int main(int argc, char *argv)
+/* int main(int argc, char *argv)
 {
 	sjniEnv e(JNI_VERSION_1_6);
 	printf("vm = 0x%08X env = 0x%08X\n", e.jvm(), e.jenv());
@@ -122,4 +175,4 @@ int main(int argc, char *argv)
 	{
 		sleep(1);
 	}
-}
+} */
