@@ -71,6 +71,16 @@ public:
 	jobject getO() const { return env->GetObjectField(obj, fieldID); }
 	// sjniObj getO() { return sjniObj(env->GetObjectField(obj, fieldID)); }
 
+	operator jboolean() { return getZ(); }
+	operator jbyte() { return getB(); }
+	operator jchar() { return getC(); }
+	operator jshort() { return getS(); }
+	operator jint() { return getI(); }
+	operator jlong() { return getL(); }
+	operator jfloat() { return getF(); }
+	operator jdouble() { return getD(); }
+	operator jobject() { return getO(); }
+
 	JNIEnv* jenv() const { return env; }
 	const char* getClassName() const { return clsName; }
 	jclass jcls() const { return cls; }
@@ -133,6 +143,16 @@ public:
 	jdouble getD() { return env->GetStaticDoubleField(cls, fieldID); }
 	jobject getO() const { return env->GetStaticObjectField(cls, fieldID); }
 	// sjniObj getO() { return sjniObj(env->GetObjectField(obj, fieldID)); }
+
+	operator jboolean() { return getZ(); }
+	operator jbyte() { return getB(); }
+	operator jchar() { return getC(); }
+	operator jshort() { return getS(); }
+	operator jint() { return getI(); }
+	operator jlong() { return getL(); }
+	operator jfloat() { return getF(); }
+	operator jdouble() { return getD(); }
+	operator jobject() { return getO(); }
 
 	JNIEnv* jenv() const { return env; }
 	const char* getClassName() const { return clsName; }
