@@ -10,14 +10,14 @@ modification, are permitted provided that the following conditions are met:
     * Redistributions in binary form must reproduce the above copyright
       notice, this list of conditions and the following disclaimer in the
       documentation and/or other materials provided with the distribution.
-    * Neither the name of the <organization> nor the
-      names of its contributors may be used to endorse or promote products
+    * Neither the name of the Stanislaw Adaszewski nor the
+      names of any contributors may be used to endorse or promote products
       derived from this software without specific prior written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
 ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+DISCLAIMED. IN NO EVENT SHALL STANISLAW ADASZEWSKI BE LIABLE FOR ANY
 DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
 (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
 LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
@@ -33,6 +33,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <jni.h>
 #include <string.h>
 #include <malloc.h>
+
+#define jtrue ((jboolean) true)
+#define jfalse ((jboolean) false)
 
 class sjniMet;
 class sjniFld;
@@ -111,6 +114,16 @@ public:
 	operator jdouble() { return getD(); }
 	operator jobject() { return getO(); }
 
+	sjniFld& operator= (jboolean z) { (*this) << z; return *this; }
+	sjniFld& operator= (jbyte b) { (*this) << b; return *this; }
+	sjniFld& operator= (jchar c) { (*this) << c; return *this; }
+	sjniFld& operator= (jshort s) { (*this) << s; return *this; }
+	sjniFld& operator= (jint i) { (*this) << i; return *this; }
+	sjniFld& operator= (jlong l) { (*this) << l; return *this; }
+	sjniFld& operator= (jfloat f) { (*this) << f; return *this; }
+	sjniFld& operator= (jdouble d) { (*this) << d; return *this; }
+	sjniFld& operator= (jobject o) { (*this) << o; return *this; }
+
 	JNIEnv* jenv() const { return env; }
 	const char* getClassName() const { return clsName; }
 	jclass jcls() const { return cls; }
@@ -183,6 +196,16 @@ public:
 	operator jfloat() { return getF(); }
 	operator jdouble() { return getD(); }
 	operator jobject() { return getO(); }
+
+	sjniSFld& operator= (jboolean z) { (*this) << z; return *this; }
+	sjniSFld& operator= (jbyte b) { (*this) << b; return *this; }
+	sjniSFld& operator= (jchar c) { (*this) << c; return *this; }
+	sjniSFld& operator= (jshort s) { (*this) << s; return *this; }
+	sjniSFld& operator= (jint i) { (*this) << i; return *this; }
+	sjniSFld& operator= (jlong l) { (*this) << l; return *this; }
+	sjniSFld& operator= (jfloat f) { (*this) << f; return *this; }
+	sjniSFld& operator= (jdouble d) { (*this) << d; return *this; }
+	sjniSFld& operator= (jobject o) { (*this) << o; return *this; }
 
 	JNIEnv* jenv() const { return env; }
 	const char* getClassName() const { return clsName; }
@@ -736,6 +759,17 @@ public:
 	jfloat getF(int idx) { jfloat buf; env->GetFloatArrayRegion((jfloatArray) obj, idx, 1, &buf); return buf; }
 	jdouble getD(int idx) { jdouble buf; env->GetDoubleArrayRegion((jdoubleArray) obj, idx, 1, &buf); return buf; }
 	jobject getO(int idx) { return env->GetObjectArrayElement((jobjectArray) obj, idx); } // , 1, &buf); return buf; }
+	sjniObj getSO(int idx)
+	{
+		char *buf = strdup(arySig), *bufp = buf;
+		while (*bufp == '[') bufp++;
+		bufp[strlen(bufp)-1] = 0;
+		jclass cls = env->FindClass(bufp); // arySig + 1);
+		sjniObj o(env, arySig + 1, cls, getO(idx));
+		env->DeleteLocalRef(cls);
+		free(buf);
+		return o;
+	}
 
 	void set(int idx, jboolean z) { env->SetBooleanArrayRegion((jbooleanArray) obj, idx, 1, &z); }
 	void set(int idx, jbyte b) { env->SetByteArrayRegion((jbyteArray) obj, idx, 1, &b); }
@@ -756,6 +790,7 @@ public:
 	sjniAry& operator<< (jfloat f) { set(curIdx, f); curIdx++; return *this; }
 	sjniAry& operator<< (jdouble d) { set(curIdx, d); curIdx++; return *this; }
 	sjniAry& operator<< (jobject o) { set(curIdx, o); curIdx++; return *this; }
+	sjniAry& operator<< (const sjniObj &o) { set(curIdx, o.jobj()); return *this; }
 
 	void setCurIdx(int idx) { curIdx = idx; }
 
