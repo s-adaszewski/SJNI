@@ -29,7 +29,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "sjni.h"
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#define sleep(x) Sleep(x)
+#else
 #include <unistd.h>
+#endif
 
 /* sjniCall sjniObj::operator<< (const char *met)
 {
@@ -51,7 +57,7 @@ sjniFld::sjniFld(JNIEnv *aEnv, /* const char *aClsName, jclass aCls, */ const ch
 	env = aEnv;
 	if (sig[0] == 'L')
 	{
-		clsName = strdup(sig + 1);
+		clsName = _strdup(sig + 1);
 		clsName[strlen(clsName)-1] = 0;
 		sjniCls clz(env, clsName);
 		cls = (jclass) env->NewLocalRef(clz.jcls());
@@ -65,7 +71,7 @@ sjniFld::sjniFld(JNIEnv *aEnv, /* const char *aClassName,  jclass aCls, */ jobje
 	env = aEnv;
 	if (sig[0] == 'L')
 	{
-		clsName = strdup(sig + 1);
+		clsName = _strdup(sig + 1);
 		clsName[strlen(clsName)-1] = 0;
 		sjniCls clz(env, clsName);
 		cls = (jclass) env->NewLocalRef(clz.jcls());
@@ -81,7 +87,7 @@ sjniSFld::sjniSFld(JNIEnv *aEnv, /* const char *aClsName, */ jclass aCls, const 
 	cls = aCls;
 	if (sig[0] == 'L')
 	{
-		clsName = strdup(sig + 1);
+		clsName = _strdup(sig + 1);
 		clsName[strlen(clsName) - 1] = 0;
 		// cls = aCls;
 		sjniCls clz(env, clsName);
@@ -105,6 +111,32 @@ sjniCall& sjniCall::operator<< (const sjniAry &aAry)
 	append2sig(aAry.sig());
 	append2args()->l = aAry.jobj();
 	return *this;
+}
+
+void sjniCall::callO(const char *clz, sjniObj &aObj)
+{
+	jobject obj = callO(clz);
+	aObj = sjniObj(env, clz, obj);
+}
+
+void sjniCall::callA(sjniAry &aAry)
+{
+	prepMethodID(aAry.sig()); // "[", aAry.sig());
+	jobject aryObj = env->CallObjectMethodA(obj, methodID, args);
+	aAry.receiveObject(env, aryObj);
+}
+
+void sjniSCall::callO(const char *clz, sjniObj &aObj)
+{
+	jobject obj = callO(clz);
+	aObj = sjniObj(env, clz, obj);
+}
+
+void sjniSCall::callA(sjniAry &aAry)
+{
+	prepMethodID(aAry.sig()); // "[", aAry.sig());
+	jobject aryObj = env->CallStaticObjectMethodA(cls, methodID, args);
+	aAry.receiveObject(env, aryObj);
 }
 
 /* int main(int argc, char *argv[])
@@ -154,7 +186,7 @@ sjniCall& sjniCall::operator<< (const sjniAry &aAry)
 	_exit(0);
 } */
 
-int main(int argc, char *argv)
+/* int main(int argc, char *argv)
 {
 	sjniEnv e(JNI_VERSION_1_6);
 	printf("vm = 0x%08X env = 0x%08X\n", e.jvm(), e.jenv());
@@ -175,4 +207,4 @@ int main(int argc, char *argv)
 	{
 		sleep(1);
 	}
-}
+} */

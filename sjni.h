@@ -33,6 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <jni.h>
 #include <string.h>
 #include <malloc.h>
+#include <stdlib.h>
 
 #define jtrue ((jboolean) true)
 #define jfalse ((jboolean) false)
@@ -275,7 +276,9 @@ public:
 	jlong callL() { prepMethodID("J"); env->CallLongMethodA(obj, methodID, args); }
 	jfloat callF() { prepMethodID("F"); env->CallFloatMethodA(obj, methodID, args); }
 	jdouble callD() { prepMethodID("D"); env->CallDoubleMethodA(obj, methodID, args); }
-	jobject callO(const char *clz) { prepMethodID("L", clz); env->CallObjectMethodA(obj, methodID, args); }
+	jobject callO(const char *clz) { prepMethodID("L", clz); return env->CallObjectMethodA(obj, methodID, args); }
+	void callO(const char *clz, sjniObj &);
+	void callA(sjniAry&);
 	// sjniObj callO(const char *clz) { prepMethodID("L", clz); env->CallObjectMethod(obj, methodID, args); }
 
 protected:
@@ -308,7 +311,7 @@ protected:
 		return &args[nargs-1];
 	}
 
-	void prepMethodID(const char *type)
+	virtual void prepMethodID(const char *type)
 	{
 		if (!methodID)
 		{
@@ -316,6 +319,10 @@ protected:
 			append2sig(type);
 			printf("GetMethodID() cls = 0x%08X, method = %s, sig = %s\n", cls, method, sig);
 			methodID = env->GetMethodID(cls, method, sig);
+			if (!methodID)
+			{
+				printf("Method %s %s not found\n", method, sig);
+			}
 		}
 
 		printf("nargs = %d aargs = %d\n", nargs, aargs);
@@ -334,6 +341,10 @@ protected:
 			append2sig(clz);
 			append2sig(";");
 			methodID = env->GetMethodID(cls, method, sig);
+			if (!methodID)
+			{
+				printf("Method %s %s not found\n", method, sig);
+			}
 		}
 	}
 
@@ -388,7 +399,9 @@ public:
 	jlong callL() { prepMethodID("J"); env->CallStaticLongMethodA(cls, methodID, args); }
 	jfloat callF() { prepMethodID("F"); env->CallStaticFloatMethodA(cls, methodID, args); }
 	jdouble callD() { prepMethodID("D"); env->CallStaticDoubleMethodA(cls, methodID, args); }
-	jobject callO(const char *clz) { prepMethodID("L", clz); env->CallStaticObjectMethodA(cls, methodID, args); }
+	jobject callO(const char *clz) { prepMethodID("L", clz); return env->CallStaticObjectMethodA(cls, methodID, args); }
+	void callO(const char *clz, sjniObj &);
+	void callA(sjniAry&);
 	// sjniObj callO(const char *clz) { prepMethodID("L", clz); env->CallObjectMethod(obj, methodID, args); }
 
 protected:
@@ -400,6 +413,10 @@ protected:
 			append2sig(type);
 			printf("GetStaticMethodID() cls = 0x%08X, method = %s, sig = %s\n", cls, method, sig);
 			methodID = env->GetStaticMethodID(cls, method, sig);
+			if (!methodID)
+			{
+				printf("Method %s %s not found\n", method, sig);
+			}
 		}
 
 		printf("nargs = %d aargs = %d\n", nargs, aargs);
@@ -418,6 +435,10 @@ protected:
 			append2sig(clz);
 			append2sig(";");
 			methodID = env->GetStaticMethodID(cls, method, sig);
+			if (!methodID)
+			{
+				printf("Method %s %s not found\n", method, sig);
+			}
 		}
 	}
 };
@@ -433,15 +454,32 @@ public:
 		// *this = other;
 		// clsName = strdup(clsName);
 		env = other.env;
-		clsName = strdup(other.clsName);
-		cls = (jclass) env->NewLocalRef(other.cls);
-		obj = env->NewLocalRef(other.obj);
+		clsName = _strdup(other.clsName);
+		if (other.cls) cls = (jclass) env->NewLocalRef(other.cls);
+		if (other.obj) obj = env->NewLocalRef(other.obj);
+	}
+
+	sjniObj& operator=(const sjniObj& other)
+	{
+		env = other.env;
+		clsName = _strdup(other.clsName);
+		if (other.cls) cls = (jclass) env->NewLocalRef(other.cls);
+		if (other.obj) obj = env->NewLocalRef(other.obj);
+		return *this;
+	}
+
+	sjniObj(JNIEnv *aEnv, /* const sjniObj &other, */ const char *aClsName, jobject aObj)
+	{
+		env = aEnv; // other.env;
+		clsName = _strdup(aClsName);
+		cls = env->FindClass(aClsName);
+		obj = aObj; // env->NewLocalRef(
 	}
 
 	sjniObj(JNIEnv *aEnv, const char *aClsName, jclass aCls, jobject aObj)
 	{
 		env = aEnv;
-		clsName = strdup(aClsName);
+		clsName = _strdup(aClsName);
 		// cls = aCls;
 		cls = (jclass) env->NewLocalRef(aCls);
 		obj = aObj; // env->NewLocalRef(aObj);
@@ -451,7 +489,7 @@ public:
 	sjniObj(const sjniFld &f)
 	{
 		env = f.jenv();
-		clsName = strdup(f.getClassName());
+		clsName = _strdup(f.getClassName());
 		cls = (jclass) env->NewLocalRef(f.jcls());
 		obj = f.getO();
 	}
@@ -459,15 +497,15 @@ public:
 	sjniObj(const sjniSFld &f)
 	{
 		env = f.jenv();
-		clsName = strdup(f.getClassName());
+		clsName = _strdup(f.getClassName());
 		cls = (jclass) env->NewLocalRef(f.jcls());
 		obj = f.getO();
 	}
 
 	~sjniObj()
 	{
-		env->DeleteLocalRef(obj);
-		env->DeleteLocalRef(cls);
+		if (obj) env->DeleteLocalRef(obj);
+		if (cls) env->DeleteLocalRef(cls);
 		free(clsName);
 	}
 
@@ -501,7 +539,7 @@ public:
 		return sjniCall(env, cls, obj, met);
 	}
 
-	sjniCall sCall (const char *met)
+	sjniSCall sCall (const char *met)
 	{
 		return sjniSCall(env, cls, met);
 	}
@@ -523,6 +561,11 @@ public:
 	}
 
 	sjniFld fld(const sjniFld&);
+	
+	sjniObj as(const char *otherClsName)
+	{
+		return sjniObj(env, otherClsName, cls, obj);
+	}
 
 	/* jboolean getZ(const char*);
 	jbyte getB(const char*);
@@ -561,6 +604,8 @@ public:
 	const char *getClsName() const { return clsName; }
 	jobject jobj() const { return obj; }
 	JNIEnv* jenv() const { return env; }
+	bool isNull() { return (obj == 0); }
+	bool notNull() { return (obj != 0); }
 
 protected:
 	JNIEnv *env;
@@ -577,7 +622,7 @@ public:
 		env = other.env;
 		cls = (jclass) env->NewLocalRef(other.cls);
 		printf("other.cls = 0x%08X cls = 0x%08X\n", other.cls, cls);
-		clsName = strdup(other.clsName);
+		clsName = _strdup(other.clsName);
 	}
 
 	sjniCls(JNIEnv *aEnv, const char *clz)
@@ -585,7 +630,7 @@ public:
 		env = aEnv;
 		printf("Trying to find class %s\n", clz);
 		cls = env->FindClass(clz);
-		clsName = strdup(clz);
+		clsName = _strdup(clz);
 	}
 
 	~sjniCls()
@@ -640,7 +685,7 @@ public:
 	sjniStr(JNIEnv *aEnv, const char* s)
 	{
 		env = aEnv;
-		clsName = strdup("java/lang/String");
+		clsName = _strdup("java/lang/String");
 		cls = env->FindClass(clsName);
 		obj = env->NewStringUTF(s);
 		printf("String obj = 0x%08X (%s)\n", obj, s);
@@ -656,10 +701,41 @@ public:
 class sjniAry//: public sjniObj
 {
 public:
+	sjniAry(): env(0), obj(0), arySig(0), curIdx(0)
+	{
+	}
+
+	sjniAry(const sjniAry &aAry)
+	{
+		*this = aAry;
+	}
+
+	sjniAry& operator= (const sjniAry &aAry)
+	{
+		env = aAry.jenv();
+		obj = env->NewLocalRef(aAry.jobj());
+		arySig = _strdup(aAry.sig());
+		curIdx = 0;
+		return *this;
+	}
+
 	sjniAry(const sjniObj &aObj): curIdx(0) // obj(aObj)
 	{
 		env = aObj.jenv();
 		obj = env->NewLocalRef(aObj.jobj());
+	}
+
+	sjniAry(const char *sig): env(0), obj(0), curIdx(0)
+	{
+		arySig = (char*) malloc(strlen(sig) + 2);
+		strcpy(arySig, "[");
+		strcat(arySig, sig); // _strdup(sig);
+	}
+
+	void receiveObject(JNIEnv *aEnv, jobject aObj)
+	{
+		env = aEnv;
+		obj = aObj;
 	}
 
 	sjniAry(JNIEnv *aEnv, int len, const char *sig, const char *psig = 0, ...): curIdx(0)
@@ -708,7 +784,7 @@ private:
 			break;
 		case 'L':
 			{
-				char *buf = strdup(sig + 1);
+				char *buf = _strdup(sig + 1);
 				buf[strlen(buf)-1] = 0;
 				jclass cls = env->FindClass(buf);
 				jmethodID ctorID = env->GetMethodID(cls, "<init>", psig);
@@ -761,7 +837,7 @@ public:
 	jobject getO(int idx) { return env->GetObjectArrayElement((jobjectArray) obj, idx); } // , 1, &buf); return buf; }
 	sjniObj getSO(int idx)
 	{
-		char *buf = strdup(arySig), *bufp = buf;
+		char *buf = _strdup(arySig), *bufp = buf;
 		while (*bufp == '[') bufp++;
 		bufp[strlen(bufp)-1] = 0;
 		jclass cls = env->FindClass(bufp); // arySig + 1);
@@ -796,6 +872,7 @@ public:
 
 	jsize len() { return env->GetArrayLength((jarray) obj); }
 
+	JNIEnv* jenv() const { return env; }
 	jobject jobj() const { return obj; }
 	const char* sig() const { return arySig; }
 
@@ -814,7 +891,7 @@ public:
 		// vm = other.vm;
 		// env = other.env;
 		env = aEnv; // .jenv();
-		pkgPrefix = strdup(aPkgPrefix);
+		pkgPrefix = _strdup(aPkgPrefix);
 	}
 
 	~sjniPkg()
@@ -877,12 +954,25 @@ public:
 	void create(jint version)
 	{
 		JavaVMInitArgs args;
+		JavaVMOption options[1];
 		args.version = version;
 		args.nOptions = 0;
-		args.options = 0; 
+		args.options = &options[0]; 
 		args.ignoreUnrecognized = JNI_TRUE;
+		char *cp = getenv("CLASSPATH");
+		char *buf(0);
+		if (cp)
+		{
+			buf = (char*) malloc(strlen(cp) + 32);
+			strcpy(buf, "-Djava.class.path=");
+			strcat(buf, cp);
+			options[0].optionString = buf;
+			args.nOptions++;
+			printf("%s\n", buf);
+		}
 		// JNI_GetDefaultJavaVMInitArgs(&args);
 		JNI_CreateJavaVM(&vm, (void**) &env, &args);
+		free(buf);
 	}
 	void create(JavaVM *aVm, jint version)
 	{
@@ -910,12 +1000,24 @@ public:
 		return sjniStr(env, s);
 	}
 
+	sjniObj obj(const char *clsName, jobject obj)
+	{
+		return sjniObj(env, clsName, obj);
+	}
+
 	sjniAry ary(int len, const char *sig, const char *psig = 0, ...)
 	{
 		va_list ap;
 		va_start(ap, psig);
 		sjniAry a = sjniAry(env, len, sig, psig, ap);
 		va_end(ap);
+		return a;
+	}
+
+	sjniAry ary(const char *sig, jobject aObj)
+	{
+		sjniAry a(sig);
+		a.receiveObject(env, aObj);
 		return a;
 	}
 
@@ -927,6 +1029,54 @@ public:
 		sjniObj o = c.nnew(sig, ap);
 		va_end(ap);
 		return o;
+	}
+
+	jboolean hasException()
+	{
+		return env->ExceptionCheck();
+	}
+
+	bool clearException()
+	{
+		jthrowable exc = env->ExceptionOccurred();
+		if (exc)
+		{
+			env->ExceptionClear(); // exc);
+			env->DeleteLocalRef(exc);
+			return true;
+		}
+		return false;
+	}
+
+	jthrowable exception()
+	{
+		return env->ExceptionOccurred();
+	}
+
+	bool describeAndClearException()
+	{
+		jthrowable exc = env->ExceptionOccurred();
+		if (exc)
+		{
+			env->ExceptionDescribe();
+			env->ExceptionClear();
+			env->DeleteLocalRef(exc);
+			return true;
+		}
+		return false;
+	}
+
+	sjniObj getAndDescribeAndClearException()
+	{
+		jthrowable exc = env->ExceptionOccurred();
+		if (exc)
+		{
+			env->ExceptionDescribe();
+			env->ExceptionClear();
+			// env->DeleteLocalRef(exc);
+			return obj("Ljava/lang/Throwable;", exc);
+		}
+		return sjniObj();
 	}
 
 	JavaVM *jvm() const { return vm; }
