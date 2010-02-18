@@ -37,6 +37,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <unistd.h>
 #endif
 
+#if defined(_SJNI_DETECT_LEAKS_)
+int _sjni_total_ref_count;
+#endif
+
 /* sjniCall sjniObj::operator<< (const char *met)
 {
 	return sjniCall(env, cls, obj, met);
@@ -60,7 +64,7 @@ sjniFld::sjniFld(JNIEnv *aEnv, /* const char *aClsName, jclass aCls, */ const ch
 		clsName = _strdup(sig + 1);
 		clsName[strlen(clsName)-1] = 0;
 		sjniCls clz(env, clsName);
-		cls = (jclass) env->NewLocalRef(clz.jcls());
+		cls = (jclass) env->NewLocalRef(clz.jcls()); _SJNI_INC_REF_COUNT2(cls);
 	}
 	// cls = aCls;
 	fieldID = env->GetFieldID(cls, name, sig);
@@ -74,7 +78,7 @@ sjniFld::sjniFld(JNIEnv *aEnv, /* const char *aClassName,  jclass aCls, */ jobje
 		clsName = _strdup(sig + 1);
 		clsName[strlen(clsName)-1] = 0;
 		sjniCls clz(env, clsName);
-		cls = (jclass) env->NewLocalRef(clz.jcls());
+		cls = (jclass) env->NewLocalRef(clz.jcls()); _SJNI_INC_REF_COUNT2(cls);
 	}
 	// cls = aCls;
 	fieldID = env->GetFieldID(cls, name, sig);
@@ -91,9 +95,9 @@ sjniSFld::sjniSFld(JNIEnv *aEnv, /* const char *aClsName, */ jclass aCls, const 
 		clsName[strlen(clsName) - 1] = 0;
 		// cls = aCls;
 		sjniCls clz(env, clsName);
-		fieldCls = (jclass) env->NewLocalRef(clz.jcls());
+		fieldCls = (jclass) env->NewLocalRef(clz.jcls()); _SJNI_INC_REF_COUNT2(fieldCls);
 	}
-	cls = (jclass) env->NewLocalRef(aCls);
+	cls = (jclass) env->NewLocalRef(aCls); _SJNI_INC_REF_COUNT2(cls);
 	fieldID = env->GetStaticFieldID(cls, name, sig);
 }
 
@@ -122,7 +126,7 @@ void sjniCall::callO(const char *clz, sjniObj &aObj)
 void sjniCall::callA(sjniAry &aAry)
 {
 	prepMethodID(aAry.sig()); // "[", aAry.sig());
-	jobject aryObj = env->CallObjectMethodA(obj, methodID, args);
+	jobject aryObj = env->CallObjectMethodA(obj, methodID, args); _SJNI_INC_REF_COUNT2(aryObj);
 	aAry.receiveObject(env, aryObj);
 }
 
@@ -135,7 +139,7 @@ void sjniSCall::callO(const char *clz, sjniObj &aObj)
 void sjniSCall::callA(sjniAry &aAry)
 {
 	prepMethodID(aAry.sig()); // "[", aAry.sig());
-	jobject aryObj = env->CallStaticObjectMethodA(cls, methodID, args);
+	jobject aryObj = env->CallStaticObjectMethodA(cls, methodID, args); _SJNI_INC_REF_COUNT2(aryObj);
 	aAry.receiveObject(env, aryObj);
 }
 

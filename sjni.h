@@ -35,6 +35,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <malloc.h>
 #include <stdlib.h>
 
+#ifdef _SJNI_DETECT_LEAKS_
+extern int _sjni_total_ref_count;
+#define _SJNI_INC_REF_COUNT _sjni_total_ref_count++
+#define _SJNI_DEC_REF_COUNT _sjni_total_ref_count--
+#define _SJNI_INC_REF_COUNT2(x) { if (x) _sjni_total_ref_count++; }
+#else
+#define _SJNI_INC_REF_COUNT
+#define _SJNI_DEC_REF_COUNT
+#define _SJNI_INC_REF_COUNT2(x)
+#endif
+
 #define jtrue ((jboolean) true)
 #define jfalse ((jboolean) false)
 
@@ -57,6 +68,9 @@ public:
 	jmethodID jmet() { return methodID; }
 
 private:
+	sjniMet& operator=(const sjniMet&) { return *this; }
+
+private:
 	jmethodID methodID;
 };
 
@@ -69,6 +83,7 @@ public:
 	
 	~sjniFld()
 	{
+		if (cls) { env->DeleteLocalRef(cls); _SJNI_DEC_REF_COUNT; }
 		free(clsName);
 	}
 
@@ -80,7 +95,7 @@ public:
 	sjniFld& operator>> (jlong &l) { l = env->GetLongField(obj, fieldID); return *this; }
 	sjniFld& operator>> (jfloat &f) { f = env->GetFloatField(obj, fieldID); return *this; }
 	sjniFld& operator>> (jdouble &d) { d = env->GetDoubleField(obj, fieldID); return *this; }
-	sjniFld& operator>> (jobject &o) { o = env->GetObjectField(obj, fieldID); return *this; }
+	sjniFld& operator>> (jobject &o) { o = env->GetObjectField(obj, fieldID); _SJNI_INC_REF_COUNT2(o); return *this; }
 	// sjniFld& operator>> (sjniObj &o) { o = sjniObj(env->GetObjectField(obj, fieldID)); return *this; }
 
 	sjniFld& operator<< (jboolean z) { env->SetBooleanField(obj, fieldID, z); return *this; }
@@ -102,7 +117,7 @@ public:
 	jlong getL() { return env->GetLongField(obj, fieldID); }
 	jfloat getF() { return env->GetFloatField(obj, fieldID); }
 	jdouble getD() { return env->GetDoubleField(obj, fieldID); }
-	jobject getO() const { return env->GetObjectField(obj, fieldID); }
+	jobject getO() const { _SJNI_INC_REF_COUNT; return env->GetObjectField(obj, fieldID); }
 	// sjniObj getO() { return sjniObj(env->GetObjectField(obj, fieldID)); }
 
 	operator jboolean() { return getZ(); }
@@ -130,6 +145,9 @@ public:
 	jclass jcls() const { return cls; }
 
 private:
+	sjniFld& operator= (const sjniFld&) { return *this; }
+
+private:
 	JNIEnv *env;
 	char *clsName;
 	jclass cls;
@@ -146,6 +164,14 @@ public:
 	{
 		free(clsName);
 		// env->DeleteLocalRef(cls);
+		if (fieldCls)
+		{
+			env->DeleteLocalRef(fieldCls); _SJNI_DEC_REF_COUNT;
+		}
+		if (cls)
+		{
+			env->DeleteLocalRef(cls); _SJNI_DEC_REF_COUNT;
+		}
 	}
 
 	/* sjniSFld(JNIEnv *aEnv, jclass cls, jobject aObj, const char *name, const char *sig)
@@ -163,7 +189,7 @@ public:
 	sjniSFld& operator>> (jlong &l) { l = env->GetStaticLongField(cls, fieldID); return *this; }
 	sjniSFld& operator>> (jfloat &f) { f = env->GetStaticFloatField(cls, fieldID); return *this; }
 	sjniSFld& operator>> (jdouble &d) { d = env->GetStaticDoubleField(cls, fieldID); return *this; }
-	sjniSFld& operator>> (jobject &o) { o = env->GetStaticObjectField(cls, fieldID); return *this; }
+	sjniSFld& operator>> (jobject &o) { o = env->GetStaticObjectField(cls, fieldID); _SJNI_INC_REF_COUNT2(o); return *this; }
 	// sjniFld& operator>> (sjniObj &o) { o = sjniObj(env->GetObjectField(obj, fieldID)); return *this; }
 
 	sjniSFld& operator<< (jboolean z) { env->SetStaticBooleanField(cls, fieldID, z); return *this; }
@@ -185,7 +211,7 @@ public:
 	jlong getL() { return env->GetStaticLongField(cls, fieldID); }
 	jfloat getF() { return env->GetStaticFloatField(cls, fieldID); }
 	jdouble getD() { return env->GetStaticDoubleField(cls, fieldID); }
-	jobject getO() const { return env->GetStaticObjectField(cls, fieldID); }
+	jobject getO() const { jobject o = env->GetStaticObjectField(cls, fieldID); _SJNI_INC_REF_COUNT2(o); return o; }
 	// sjniObj getO() { return sjniObj(env->GetObjectField(obj, fieldID)); }
 
 	operator jboolean() { return getZ(); }
@@ -213,6 +239,9 @@ public:
 	jclass jcls() const { return fieldCls; }
 
 private:
+	sjniSFld& operator=(const sjniSFld&) { return *this; }
+
+private:
 	JNIEnv *env;
 	char *clsName;
 	jclass cls;
@@ -230,9 +259,9 @@ public:
 	{
 		env = aEnv;
 		// cls = aCls;
-		cls = (jclass) env->NewLocalRef(aCls);
+		cls = (jclass) env->NewLocalRef(aCls); _SJNI_INC_REF_COUNT;
 		// obj = aObj;
-		obj = env->NewLocalRef(aObj);
+		obj = env->NewLocalRef(aObj); _SJNI_INC_REF_COUNT;
 		method = aMethod;
 		// methodID = env->GetMethodID(cls, 
 		append2sig("(");
@@ -242,14 +271,14 @@ public:
 	{
 		env = aEnv;
 		// obj = aObj;
-		obj = env->NewLocalRef(aObj);
+		obj = env->NewLocalRef(aObj); _SJNI_INC_REF_COUNT;
 		methodID = metID;
 	}
 
 	~sjniCall()
 	{
-		if (cls) env->DeleteLocalRef(cls);
-		if (obj) env->DeleteLocalRef(obj);
+		if (cls) { env->DeleteLocalRef(cls); _SJNI_DEC_REF_COUNT; }
+		if (obj) { env->DeleteLocalRef(obj); _SJNI_DEC_REF_COUNT; }
 		free(sig);
 		free(args);
 	}
@@ -267,19 +296,22 @@ public:
 	sjniCall& operator<< (const sjniObj &aObj);
 	sjniCall& operator<< (const sjniAry &aAry);
 
-	void callV() { prepMethodID("V"); env->CallVoidMethodA(obj, methodID, args); }
-	jboolean callZ() { prepMethodID("Z"); env->CallBooleanMethodA(obj, methodID, args); }
-	jbyte callB() { prepMethodID("B"); env->CallByteMethodA(obj, methodID, args); }
-	jchar callC() { prepMethodID("C"); env->CallCharMethodA(obj, methodID, args); }
-	jshort callS() { prepMethodID("S"); env->CallShortMethodA(obj, methodID, args); }
-	jint callI() { prepMethodID("I"); env->CallIntMethodA(obj, methodID, args); }
-	jlong callL() { prepMethodID("J"); env->CallLongMethodA(obj, methodID, args); }
-	jfloat callF() { prepMethodID("F"); env->CallFloatMethodA(obj, methodID, args); }
-	jdouble callD() { prepMethodID("D"); env->CallDoubleMethodA(obj, methodID, args); }
-	jobject callO(const char *clz) { prepMethodID("L", clz); return env->CallObjectMethodA(obj, methodID, args); }
-	void callO(const char *clz, sjniObj &);
-	void callA(sjniAry&);
+	virtual void callV() { prepMethodID("V"); return env->CallVoidMethodA(obj, methodID, args); }
+	virtual jboolean callZ() { prepMethodID("Z"); return env->CallBooleanMethodA(obj, methodID, args); }
+	virtual jbyte callB() { prepMethodID("B"); return env->CallByteMethodA(obj, methodID, args); }
+	virtual jchar callC() { prepMethodID("C"); return env->CallCharMethodA(obj, methodID, args); }
+	virtual jshort callS() { prepMethodID("S"); return env->CallShortMethodA(obj, methodID, args); }
+	virtual jint callI() { prepMethodID("I"); return env->CallIntMethodA(obj, methodID, args); }
+	virtual jlong callL() { prepMethodID("J"); return env->CallLongMethodA(obj, methodID, args); }
+	virtual jfloat callF() { prepMethodID("F"); return env->CallFloatMethodA(obj, methodID, args); }
+	virtual jdouble callD() { prepMethodID("D"); return env->CallDoubleMethodA(obj, methodID, args); }
+	virtual jobject callO(const char *clz) { prepMethodID("L", clz); jobject o = env->CallObjectMethodA(obj, methodID, args); _SJNI_INC_REF_COUNT2(o); return o; }
+	virtual void callO(const char *clz, sjniObj &);
+	virtual void callA(sjniAry&);
 	// sjniObj callO(const char *clz) { prepMethodID("L", clz); env->CallObjectMethod(obj, methodID, args); }
+
+private:
+	virtual sjniCall& operator=(const sjniCall&) { return *this; }
 
 protected:
 	void append2sig(const char *s)
@@ -332,7 +364,7 @@ protected:
 		}
 	}
 
-	void prepMethodID(const char *type, const char *clz)
+	virtual void prepMethodID(const char *type, const char *clz)
 	{
 		if (!methodID)
 		{
@@ -370,7 +402,7 @@ public:
 
 		env = aEnv;
 		// cls = aCls;
-		cls = (jclass) env->NewLocalRef(aCls);
+		cls = (jclass) env->NewLocalRef(aCls); _SJNI_INC_REF_COUNT;
 		// obj = aObj;
 		// env->NewLocalRef(obj);
 		method = aMethod;
@@ -384,25 +416,28 @@ public:
 
 		env = aEnv;
 		// cls = aCls;
-		cls = (jclass) env->NewLocalRef(aCls);
+		cls = (jclass) env->NewLocalRef(aCls); _SJNI_INC_REF_COUNT;
 		// obj = aObj;
 		// env->NewLocalRef(obj);
 		methodID = metID;
 	}
 
-	void callV() { prepMethodID("V"); env->CallStaticVoidMethodA(cls, methodID, args); }
-	jboolean callZ() { prepMethodID("Z"); env->CallStaticBooleanMethodA(cls, methodID, args); }
-	jbyte callB() { prepMethodID("B"); env->CallStaticByteMethodA(cls, methodID, args); }
-	jchar callC() { prepMethodID("C"); env->CallStaticCharMethodA(cls, methodID, args); }
-	jshort callS() { prepMethodID("S"); env->CallStaticShortMethodA(cls, methodID, args); }
-	jint callI() { prepMethodID("I"); env->CallStaticIntMethodA(cls, methodID, args); }
-	jlong callL() { prepMethodID("J"); env->CallStaticLongMethodA(cls, methodID, args); }
-	jfloat callF() { prepMethodID("F"); env->CallStaticFloatMethodA(cls, methodID, args); }
-	jdouble callD() { prepMethodID("D"); env->CallStaticDoubleMethodA(cls, methodID, args); }
-	jobject callO(const char *clz) { prepMethodID("L", clz); return env->CallStaticObjectMethodA(cls, methodID, args); }
+	void callV() { prepMethodID("V"); return env->CallStaticVoidMethodA(cls, methodID, args); }
+	jboolean callZ() { prepMethodID("Z"); return env->CallStaticBooleanMethodA(cls, methodID, args); }
+	jbyte callB() { prepMethodID("B"); return env->CallStaticByteMethodA(cls, methodID, args); }
+	jchar callC() { prepMethodID("C"); return env->CallStaticCharMethodA(cls, methodID, args); }
+	jshort callS() { prepMethodID("S"); return env->CallStaticShortMethodA(cls, methodID, args); }
+	jint callI() { prepMethodID("I"); return env->CallStaticIntMethodA(cls, methodID, args); }
+	jlong callL() { prepMethodID("J"); return env->CallStaticLongMethodA(cls, methodID, args); }
+	jfloat callF() { prepMethodID("F"); return env->CallStaticFloatMethodA(cls, methodID, args); }
+	jdouble callD() { prepMethodID("D"); return env->CallStaticDoubleMethodA(cls, methodID, args); }
+	jobject callO(const char *clz) { prepMethodID("L", clz); jobject o = env->CallStaticObjectMethodA(cls, methodID, args); _SJNI_INC_REF_COUNT2(o); return o; }
 	void callO(const char *clz, sjniObj &);
 	void callA(sjniAry&);
 	// sjniObj callO(const char *clz) { prepMethodID("L", clz); env->CallObjectMethod(obj, methodID, args); }
+
+private:
+	sjniSCall& operator=(const sjniSCall&) { return *this; }
 
 protected:
 	void prepMethodID(const char *type)
@@ -455,16 +490,36 @@ public:
 		// clsName = strdup(clsName);
 		env = other.env;
 		clsName = _strdup(other.clsName);
-		if (other.cls) cls = (jclass) env->NewLocalRef(other.cls);
-		if (other.obj) obj = env->NewLocalRef(other.obj);
+		if (other.cls) { cls = (jclass) env->NewLocalRef(other.cls); _SJNI_INC_REF_COUNT; }
+		if (other.obj) { obj = env->NewLocalRef(other.obj); _SJNI_INC_REF_COUNT; }
 	}
 
 	sjniObj& operator=(const sjniObj& other)
 	{
+		if (clsName) free(clsName);
+		
+		if (cls) { env->DeleteLocalRef(cls); _SJNI_DEC_REF_COUNT; }
+		if (obj) { env->DeleteLocalRef(obj); _SJNI_DEC_REF_COUNT; }
+
 		env = other.env;
 		clsName = _strdup(other.clsName);
-		if (other.cls) cls = (jclass) env->NewLocalRef(other.cls);
-		if (other.obj) obj = env->NewLocalRef(other.obj);
+
+		if (other.cls) {
+			cls = (jclass) env->NewLocalRef(other.cls);
+			_SJNI_INC_REF_COUNT;
+		} else
+		{
+			cls = 0;
+		}
+		
+		if (other.obj)
+		{
+			obj = env->NewLocalRef(other.obj);
+			_SJNI_INC_REF_COUNT;
+		} else
+		{
+			obj = 0;
+		}
 		return *this;
 	}
 
@@ -472,7 +527,7 @@ public:
 	{
 		env = aEnv; // other.env;
 		clsName = _strdup(aClsName);
-		cls = env->FindClass(aClsName);
+		cls = env->FindClass(aClsName); _SJNI_INC_REF_COUNT2(cls);
 		obj = aObj; // env->NewLocalRef(
 	}
 
@@ -481,7 +536,7 @@ public:
 		env = aEnv;
 		clsName = _strdup(aClsName);
 		// cls = aCls;
-		cls = (jclass) env->NewLocalRef(aCls);
+		cls = (jclass) env->NewLocalRef(aCls); _SJNI_INC_REF_COUNT;
 		obj = aObj; // env->NewLocalRef(aObj);
 	}
 	// sjniObj(jobject, const sjniCls&);
@@ -490,7 +545,7 @@ public:
 	{
 		env = f.jenv();
 		clsName = _strdup(f.getClassName());
-		cls = (jclass) env->NewLocalRef(f.jcls());
+		cls = (jclass) env->NewLocalRef(f.jcls()); _SJNI_INC_REF_COUNT;
 		obj = f.getO();
 	}
 
@@ -498,14 +553,14 @@ public:
 	{
 		env = f.jenv();
 		clsName = _strdup(f.getClassName());
-		cls = (jclass) env->NewLocalRef(f.jcls());
+		cls = (jclass) env->NewLocalRef(f.jcls()); _SJNI_INC_REF_COUNT;
 		obj = f.getO();
 	}
 
 	~sjniObj()
 	{
-		if (obj) env->DeleteLocalRef(obj);
-		if (cls) env->DeleteLocalRef(cls);
+		if (obj) { env->DeleteLocalRef(obj); _SJNI_DEC_REF_COUNT; }
+		if (cls) { env->DeleteLocalRef(cls); _SJNI_DEC_REF_COUNT; }
 		free(clsName);
 	}
 
@@ -620,7 +675,7 @@ public:
 	sjniCls(const sjniCls &other)
 	{
 		env = other.env;
-		cls = (jclass) env->NewLocalRef(other.cls);
+		cls = (jclass) env->NewLocalRef(other.cls); _SJNI_INC_REF_COUNT;
 		printf("other.cls = 0x%08X cls = 0x%08X\n", other.cls, cls);
 		clsName = _strdup(other.clsName);
 	}
@@ -629,19 +684,19 @@ public:
 	{
 		env = aEnv;
 		printf("Trying to find class %s\n", clz);
-		cls = env->FindClass(clz);
+		cls = env->FindClass(clz); _SJNI_INC_REF_COUNT;
 		clsName = _strdup(clz);
 	}
 
 	~sjniCls()
 	{
 		free(clsName);
-		env->DeleteLocalRef(cls);
+		if (cls) { env->DeleteLocalRef(cls); _SJNI_DEC_REF_COUNT; }
 	}
 
 	void deleteLocalRef()
 	{
-		env->DeleteLocalRef(cls);
+		env->DeleteLocalRef(cls); _SJNI_DEC_REF_COUNT;
 	}
 
 	sjniMet met(const char *metName, const char *sig) { return sjniMet(env, cls, metName, sig); }
@@ -653,7 +708,7 @@ public:
 		jmethodID ctorID = env->GetMethodID(cls, "<init>", sig);
 		va_list ap;
 		va_start(ap, sig);
-		jobject obj = env->NewObjectV(cls, ctorID, ap);
+		jobject obj = env->NewObjectV(cls, ctorID, ap); _SJNI_INC_REF_COUNT2(obj);
 		va_end(ap);
 		return sjniObj (env, clsName, cls, obj);
 	}
@@ -661,7 +716,7 @@ public:
 	sjniObj nnew(const char *sig, va_list ap)
 	{
 		jmethodID ctorID = env->GetMethodID(cls, "<init>", sig);
-		jobject obj = env->NewObjectV(cls, ctorID, ap);
+		jobject obj = env->NewObjectV(cls, ctorID, ap); _SJNI_INC_REF_COUNT2(obj);
 		return sjniObj(env, clsName, cls, obj);
 	}
 
@@ -672,6 +727,9 @@ public:
 
 	const char* name() { return clsName; }
 	jclass jcls() { return cls; }
+
+private:
+	sjniCls& operator=(const sjniCls&) { return *this; }
 
 private:
 	JNIEnv *env;
@@ -686,8 +744,8 @@ public:
 	{
 		env = aEnv;
 		clsName = _strdup("java/lang/String");
-		cls = env->FindClass(clsName);
-		obj = env->NewStringUTF(s);
+		cls = env->FindClass(clsName); _SJNI_INC_REF_COUNT2(cls);
+		obj = env->NewStringUTF(s); _SJNI_INC_REF_COUNT2(obj);
 		printf("String obj = 0x%08X (%s)\n", obj, s);
 	}
 
@@ -705,15 +763,18 @@ public:
 	{
 	}
 
-	sjniAry(const sjniAry &aAry)
+	sjniAry(const sjniAry &aAry): env(0), obj(0), arySig(0), curIdx(0)
 	{
 		*this = aAry;
 	}
 
 	sjniAry& operator= (const sjniAry &aAry)
 	{
+		free(arySig);
+		if (obj) { env->DeleteLocalRef(obj); _SJNI_DEC_REF_COUNT; }
+
 		env = aAry.jenv();
-		obj = env->NewLocalRef(aAry.jobj());
+		obj = env->NewLocalRef(aAry.jobj()); _SJNI_INC_REF_COUNT2(obj);
 		arySig = _strdup(aAry.sig());
 		curIdx = 0;
 		return *this;
@@ -722,7 +783,7 @@ public:
 	sjniAry(const sjniObj &aObj): curIdx(0) // obj(aObj)
 	{
 		env = aObj.jenv();
-		obj = env->NewLocalRef(aObj.jobj());
+		obj = env->NewLocalRef(aObj.jobj()); _SJNI_INC_REF_COUNT2(obj);
 	}
 
 	sjniAry(const char *sig): env(0), obj(0), curIdx(0)
@@ -806,9 +867,11 @@ private:
 				free(buf);
 				// free(buf2);
 			}
+			_SJNI_INC_REF_COUNT2(obj);
 			return;
 		}
 		{
+			_SJNI_INC_REF_COUNT2(obj);
 			// char buf[3];
 			arySig = (char*) malloc(3);
 			arySig[0] = '[';
@@ -823,7 +886,7 @@ public:
 	~sjniAry()
 	{
 		free(arySig);
-		env->DeleteLocalRef(obj);
+		if (obj) { env->DeleteLocalRef(obj); _SJNI_DEC_REF_COUNT; }
 	}
 
 	jboolean getZ(int idx) { jboolean buf; env->GetBooleanArrayRegion((jbooleanArray) obj, idx, 1, &buf); return buf; }
@@ -834,15 +897,15 @@ public:
 	jlong getL(int idx) { jlong buf; env->GetLongArrayRegion((jlongArray) obj, idx, 1, &buf); return buf; }
 	jfloat getF(int idx) { jfloat buf; env->GetFloatArrayRegion((jfloatArray) obj, idx, 1, &buf); return buf; }
 	jdouble getD(int idx) { jdouble buf; env->GetDoubleArrayRegion((jdoubleArray) obj, idx, 1, &buf); return buf; }
-	jobject getO(int idx) { return env->GetObjectArrayElement((jobjectArray) obj, idx); } // , 1, &buf); return buf; }
+	jobject getO(int idx) { jobject o = env->GetObjectArrayElement((jobjectArray) obj, idx); _SJNI_INC_REF_COUNT2(o); return o; } // , 1, &buf); return buf; }
 	sjniObj getSO(int idx)
 	{
 		char *buf = _strdup(arySig), *bufp = buf;
 		while (*bufp == '[') bufp++;
 		bufp[strlen(bufp)-1] = 0;
-		jclass cls = env->FindClass(bufp); // arySig + 1);
+		jclass cls = env->FindClass(bufp); _SJNI_INC_REF_COUNT2(cls); // arySig + 1);
 		sjniObj o(env, arySig + 1, cls, getO(idx));
-		env->DeleteLocalRef(cls);
+		env->DeleteLocalRef(cls); _SJNI_DEC_REF_COUNT;
 		free(buf);
 		return o;
 	}
@@ -921,6 +984,9 @@ public:
 		va_end(ap);
 		return o;
 	}
+
+private:
+	sjniPkg& operator=(const sjniPkg&) { return *this; }
 
 private:
 	JNIEnv *env;
@@ -1038,11 +1104,11 @@ public:
 
 	bool clearException()
 	{
-		jthrowable exc = env->ExceptionOccurred();
+		jthrowable exc = env->ExceptionOccurred(); _SJNI_INC_REF_COUNT2(exc);
 		if (exc)
 		{
 			env->ExceptionClear(); // exc);
-			env->DeleteLocalRef(exc);
+			env->DeleteLocalRef(exc); _SJNI_DEC_REF_COUNT;
 			return true;
 		}
 		return false;
@@ -1055,12 +1121,12 @@ public:
 
 	bool describeAndClearException()
 	{
-		jthrowable exc = env->ExceptionOccurred();
+		jthrowable exc = env->ExceptionOccurred(); _SJNI_INC_REF_COUNT2(exc);
 		if (exc)
 		{
 			env->ExceptionDescribe();
 			env->ExceptionClear();
-			env->DeleteLocalRef(exc);
+			env->DeleteLocalRef(exc); _SJNI_DEC_REF_COUNT;
 			return true;
 		}
 		return false;
@@ -1068,7 +1134,7 @@ public:
 
 	sjniObj getAndDescribeAndClearException()
 	{
-		jthrowable exc = env->ExceptionOccurred();
+		jthrowable exc = env->ExceptionOccurred(); _SJNI_INC_REF_COUNT2(exc);
 		if (exc)
 		{
 			env->ExceptionDescribe();
@@ -1081,6 +1147,9 @@ public:
 
 	JavaVM *jvm() const { return vm; }
 	JNIEnv* jenv() const { return env; }
+
+private:
+	sjniEnv& operator=(const sjniEnv&) { return *this; }
 
 private:
 	JavaVM *vm;
