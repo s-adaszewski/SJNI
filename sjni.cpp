@@ -61,7 +61,7 @@ sjniFld::sjniFld(JNIEnv *aEnv, /* const char *aClsName, jclass aCls, */ const ch
 	env = aEnv;
 	if (sig[0] == 'L')
 	{
-		clsName = _strdup(sig + 1);
+		clsName = strdup(sig + 1);
 		clsName[strlen(clsName)-1] = 0;
 		sjniCls clz(env, clsName);
 		cls = (jclass) env->NewLocalRef(clz.jcls()); _SJNI_INC_REF_COUNT2(cls);
@@ -75,7 +75,7 @@ sjniFld::sjniFld(JNIEnv *aEnv, /* const char *aClassName,  jclass aCls, */ jobje
 	env = aEnv;
 	if (sig[0] == 'L')
 	{
-		clsName = _strdup(sig + 1);
+		clsName = strdup(sig + 1);
 		clsName[strlen(clsName)-1] = 0;
 		sjniCls clz(env, clsName);
 		cls = (jclass) env->NewLocalRef(clz.jcls()); _SJNI_INC_REF_COUNT2(cls);
@@ -85,13 +85,13 @@ sjniFld::sjniFld(JNIEnv *aEnv, /* const char *aClassName,  jclass aCls, */ jobje
 	obj = aObj;
 }
 
-sjniSFld::sjniSFld(JNIEnv *aEnv, /* const char *aClsName, */ jclass aCls, const char *name, const char *sig): clsName(0), cls(0) // obj(0)
+sjniSFld::sjniSFld(JNIEnv *aEnv, /* const char *aClsName, */ jclass aCls, const char *name, const char *sig): clsName(0), cls(0), fieldCls(0) // obj(0)
 {
 	env = aEnv;
 	cls = aCls;
 	if (sig[0] == 'L')
 	{
-		clsName = _strdup(sig + 1);
+		clsName = strdup(sig + 1);
 		clsName[strlen(clsName) - 1] = 0;
 		// cls = aCls;
 		sjniCls clz(env, clsName);
@@ -190,7 +190,7 @@ void sjniSCall::callA(sjniAry &aAry)
 	_exit(0);
 } */
 
-/* int main(int argc, char *argv)
+int main(int argc, char *argv)
 {
 	sjniEnv e(JNI_VERSION_1_6);
 	printf("vm = 0x%08X env = 0x%08X\n", e.jvm(), e.jenv());
@@ -200,8 +200,8 @@ void sjniSCall::callA(sjniAry &aAry)
 	(frame << "setSize" << 300 << 200).callV();
 	sjniStr title(e.jenv(), "Test"); // = e.str("Test");
 	printf("title clsName = %s\n", title.getClsName());
-	(frame << "setTitle" << title).callV();
-	int EXIT_ON_CLOSE = JFrame.sfld("EXIT_ON_CLOSE", "I"); // .getI();
+	(frame << "setTitle" << title).callV(); // return 0;
+	int EXIT_ON_CLOSE = (jint) JFrame.sfld("EXIT_ON_CLOSE", "I"); // .getI();
 	printf("EXIT_ON_CLOSE = %d\n", EXIT_ON_CLOSE);
 	(frame << "setDefaultCloseOperation" << EXIT_ON_CLOSE).callV();
 	// sleep(1000);
@@ -211,4 +211,4 @@ void sjniSCall::callA(sjniAry &aAry)
 	{
 		sleep(1);
 	}
-} */
+}

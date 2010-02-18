@@ -46,6 +46,10 @@ extern int _sjni_total_ref_count;
 #define _SJNI_INC_REF_COUNT2(x)
 #endif
 
+#ifdef _WIN32
+#define strdup(x) _strdup(x)
+#endif
+
 #define jtrue ((jboolean) true)
 #define jfalse ((jboolean) false)
 
@@ -489,7 +493,7 @@ public:
 		// *this = other;
 		// clsName = strdup(clsName);
 		env = other.env;
-		clsName = _strdup(other.clsName);
+		clsName = strdup(other.clsName);
 		if (other.cls) { cls = (jclass) env->NewLocalRef(other.cls); _SJNI_INC_REF_COUNT; }
 		if (other.obj) { obj = env->NewLocalRef(other.obj); _SJNI_INC_REF_COUNT; }
 	}
@@ -502,7 +506,7 @@ public:
 		if (obj) { env->DeleteLocalRef(obj); _SJNI_DEC_REF_COUNT; }
 
 		env = other.env;
-		clsName = _strdup(other.clsName);
+		clsName = strdup(other.clsName);
 
 		if (other.cls) {
 			cls = (jclass) env->NewLocalRef(other.cls);
@@ -526,7 +530,7 @@ public:
 	sjniObj(JNIEnv *aEnv, /* const sjniObj &other, */ const char *aClsName, jobject aObj)
 	{
 		env = aEnv; // other.env;
-		clsName = _strdup(aClsName);
+		clsName = strdup(aClsName);
 		cls = env->FindClass(aClsName); _SJNI_INC_REF_COUNT2(cls);
 		obj = aObj; // env->NewLocalRef(
 	}
@@ -534,7 +538,7 @@ public:
 	sjniObj(JNIEnv *aEnv, const char *aClsName, jclass aCls, jobject aObj)
 	{
 		env = aEnv;
-		clsName = _strdup(aClsName);
+		clsName = strdup(aClsName);
 		// cls = aCls;
 		cls = (jclass) env->NewLocalRef(aCls); _SJNI_INC_REF_COUNT;
 		obj = aObj; // env->NewLocalRef(aObj);
@@ -544,7 +548,7 @@ public:
 	sjniObj(const sjniFld &f)
 	{
 		env = f.jenv();
-		clsName = _strdup(f.getClassName());
+		clsName = strdup(f.getClassName());
 		cls = (jclass) env->NewLocalRef(f.jcls()); _SJNI_INC_REF_COUNT;
 		obj = f.getO();
 	}
@@ -552,7 +556,7 @@ public:
 	sjniObj(const sjniSFld &f)
 	{
 		env = f.jenv();
-		clsName = _strdup(f.getClassName());
+		clsName = strdup(f.getClassName());
 		cls = (jclass) env->NewLocalRef(f.jcls()); _SJNI_INC_REF_COUNT;
 		obj = f.getO();
 	}
@@ -677,7 +681,7 @@ public:
 		env = other.env;
 		cls = (jclass) env->NewLocalRef(other.cls); _SJNI_INC_REF_COUNT;
 		printf("other.cls = 0x%08X cls = 0x%08X\n", other.cls, cls);
-		clsName = _strdup(other.clsName);
+		clsName = strdup(other.clsName);
 	}
 
 	sjniCls(JNIEnv *aEnv, const char *clz)
@@ -685,7 +689,7 @@ public:
 		env = aEnv;
 		printf("Trying to find class %s\n", clz);
 		cls = env->FindClass(clz); _SJNI_INC_REF_COUNT;
-		clsName = _strdup(clz);
+		clsName = strdup(clz);
 	}
 
 	~sjniCls()
@@ -743,7 +747,7 @@ public:
 	sjniStr(JNIEnv *aEnv, const char* s)
 	{
 		env = aEnv;
-		clsName = _strdup("java/lang/String");
+		clsName = strdup("java/lang/String");
 		cls = env->FindClass(clsName); _SJNI_INC_REF_COUNT2(cls);
 		obj = env->NewStringUTF(s); _SJNI_INC_REF_COUNT2(obj);
 		printf("String obj = 0x%08X (%s)\n", obj, s);
@@ -775,7 +779,7 @@ public:
 
 		env = aAry.jenv();
 		obj = env->NewLocalRef(aAry.jobj()); _SJNI_INC_REF_COUNT2(obj);
-		arySig = _strdup(aAry.sig());
+		arySig = strdup(aAry.sig());
 		curIdx = 0;
 		return *this;
 	}
@@ -790,7 +794,7 @@ public:
 	{
 		arySig = (char*) malloc(strlen(sig) + 2);
 		strcpy(arySig, "[");
-		strcat(arySig, sig); // _strdup(sig);
+		strcat(arySig, sig); // strdup(sig);
 	}
 
 	void receiveObject(JNIEnv *aEnv, jobject aObj)
@@ -845,7 +849,7 @@ private:
 			break;
 		case 'L':
 			{
-				char *buf = _strdup(sig + 1);
+				char *buf = strdup(sig + 1);
 				buf[strlen(buf)-1] = 0;
 				jclass cls = env->FindClass(buf);
 				jmethodID ctorID = env->GetMethodID(cls, "<init>", psig);
@@ -900,7 +904,7 @@ public:
 	jobject getO(int idx) { jobject o = env->GetObjectArrayElement((jobjectArray) obj, idx); _SJNI_INC_REF_COUNT2(o); return o; } // , 1, &buf); return buf; }
 	sjniObj getSO(int idx)
 	{
-		char *buf = _strdup(arySig), *bufp = buf;
+		char *buf = strdup(arySig), *bufp = buf;
 		while (*bufp == '[') bufp++;
 		bufp[strlen(bufp)-1] = 0;
 		jclass cls = env->FindClass(bufp); _SJNI_INC_REF_COUNT2(cls); // arySig + 1);
@@ -954,7 +958,7 @@ public:
 		// vm = other.vm;
 		// env = other.env;
 		env = aEnv; // .jenv();
-		pkgPrefix = _strdup(aPkgPrefix);
+		pkgPrefix = strdup(aPkgPrefix);
 	}
 
 	~sjniPkg()
