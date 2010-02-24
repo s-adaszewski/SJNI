@@ -10,7 +10,7 @@ modification, are permitted provided that the following conditions are met:
     * Redistributions in binary form must reproduce the above copyright
       notice, this list of conditions and the following disclaimer in the
       documentation and/or other materials provided with the distribution.
-    * Neither the name of the Stanislaw Adaszewski nor the
+    * Neither the name of Stanislaw Adaszewski nor the
       names of any contributors may be used to endorse or promote products
       derived from this software without specific prior written permission.
 
@@ -61,6 +61,76 @@ class sjniObj;
 class sjniPkg;
 class sjniAry;
 
+#ifdef _SJNI_EXCEPTIONS_
+class sjniException
+{
+public:
+	sjniException(const char *aMsg)
+	{
+		iMsg = strdup(aMsg);
+	}
+	sjniException(const sjniException& other)
+	{
+		iMsg = strdup(other.iMsg);
+	}
+	~sjniException()
+	{
+		free(iMsg);
+	}
+	sjniException& operator= (const sjniException &other)
+	{
+		iMsg = strdup(other.iMsg);
+	}
+	const char* msg() const
+	{
+		return iMsg;
+	}
+private:
+	char *iMsg;
+};
+
+class sjniClassNotFoundException: public sjniException
+{
+public:
+	sjniClassNotFoundException(const char *aMsg): sjniException(aMsg) {}
+};
+
+class sjniMethodNotFoundException: public sjniException
+{
+public:
+	sjniMethodNotFoundException(const char *aMsg): sjniException(aMsg) {}
+};
+
+class sjniFieldNotFoundException: public sjniException
+{
+public:
+	sjniFieldNotFoundException(const char *aMsg): sjniException(aMsg) {}
+};
+
+#define _SJNI_CNFE_Z(c, name)\
+if (c == 0) {\
+	char excMsgBuf[256];\
+	snprintf(excMsgBuf, 256, "Unable to find Java class %s", name);\
+	throw sjniClassNotFoundException(excMsgBuf);\
+}
+#define _SJNI_MNFE_Z(m, name, sig, cls)\
+if (m == 0) {\
+	char excMsgBuf[256];\
+	snprintf(excMsgBuf, 256, "Unable to find method %s %s in class 0x%08X", name, sig, cls);\
+	throw sjniMethodNotFoundException(excMsgBuf);\
+}
+#define _SJNI_FNFE_Z(f, name, sig, cls)\
+if (f == 0) {\
+	char excMsgBuf[256];\
+	snprintf(excMsgBuf, 256, "Unable to find field %s %s in class 0x%08X", name, sig, cls);\
+	throw sjniFieldNotFoundException(excMsgBuf);\
+}
+#else
+#define _SJNI_CNFE_Z(c, name) { printf("Unable to find Java class ##name\n"); exit(-1); }
+#define _SJNI_MNFE_Z(m, name, sig, cname) { printf("Unable to find method ##name ##sig in class ##cname\n"); exit(-1); }
+#define _SJNI_FNFE_Z(f, name, sig, cname) { printf("Unable to find field ##name ##sig in class ##cname\n"); exit(-1); }
+#endif // _SJNI_EXCEPTIONS
+
 class sjniMet
 {
 public:
@@ -81,9 +151,9 @@ private:
 class sjniFld
 {
 public:
-	sjniFld(JNIEnv *aEnv, /* const char *aClsName, jclass aCls, */ const char *name, const char *sig);
+	sjniFld(JNIEnv *aEnv, /* const char *aClsName, */ jclass ownerCls, const char *name, const char *sig);
 	
-	sjniFld(JNIEnv *aEnv, /* const char *aClassName,  jclass aCls, */ jobject aObj, const char *name, const char *sig);
+	sjniFld(JNIEnv *aEnv, /* const char *aClassName, */ jclass ownerCls, jobject aObj, const char *name, const char *sig);
 	
 	~sjniFld()
 	{
@@ -359,6 +429,7 @@ protected:
 			{
 				printf("Method %s %s not found\n", method, sig);
 			}
+			_SJNI_MNFE_Z(methodID, method, sig, cls);
 		}
 
 		printf("nargs = %d aargs = %d\n", nargs, aargs);
@@ -381,6 +452,7 @@ protected:
 			{
 				printf("Method %s %s not found\n", method, sig);
 			}
+			_SJNI_MNFE_Z(methodID, method, sig, cls);
 		}
 	}
 
@@ -456,6 +528,7 @@ protected:
 			{
 				printf("Method %s %s not found\n", method, sig);
 			}
+			_SJNI_MNFE_Z(methodID, method, sig, cls);
 		}
 
 		printf("nargs = %d aargs = %d\n", nargs, aargs);
@@ -478,6 +551,7 @@ protected:
 			{
 				printf("Method %s %s not found\n", method, sig);
 			}
+			_SJNI_MNFE_Z(methodID, method, sig, cls);
 		}
 	}
 };
@@ -531,7 +605,7 @@ public:
 	{
 		env = aEnv; // other.env;
 		clsName = strdup(aClsName);
-		cls = env->FindClass(aClsName); _SJNI_INC_REF_COUNT2(cls);
+		cls = env->FindClass(aClsName); _SJNI_CNFE_Z(cls, aClsName); _SJNI_INC_REF_COUNT2(cls);
 		obj = aObj; // env->NewLocalRef(
 	}
 
@@ -616,7 +690,7 @@ public:
 
 	sjniFld fld(const char *name, const char *sig)
 	{
-		return sjniFld(env, obj, name, sig);
+		return sjniFld(env, cls, obj, name, sig);
 	}
 
 	sjniFld fld(const sjniFld&);
@@ -688,7 +762,7 @@ public:
 	{
 		env = aEnv;
 		printf("Trying to find class %s\n", clz);
-		cls = env->FindClass(clz); _SJNI_INC_REF_COUNT;
+		cls = env->FindClass(clz); _SJNI_CNFE_Z(cls, clz); _SJNI_INC_REF_COUNT;
 		clsName = strdup(clz);
 	}
 
@@ -709,7 +783,7 @@ public:
 
 	sjniObj nnew(const char *sig, ...)
 	{
-		jmethodID ctorID = env->GetMethodID(cls, "<init>", sig);
+		jmethodID ctorID = env->GetMethodID(cls, "<init>", sig); _SJNI_MNFE_Z(ctorID, "<init>", sig, cls);
 		va_list ap;
 		va_start(ap, sig);
 		jobject obj = env->NewObjectV(cls, ctorID, ap); _SJNI_INC_REF_COUNT2(obj);
@@ -719,7 +793,7 @@ public:
 
 	sjniObj nnew(const char *sig, va_list ap)
 	{
-		jmethodID ctorID = env->GetMethodID(cls, "<init>", sig);
+		jmethodID ctorID = env->GetMethodID(cls, "<init>", sig); _SJNI_MNFE_Z(ctorID, "<init>", sig, cls);
 		jobject obj = env->NewObjectV(cls, ctorID, ap); _SJNI_INC_REF_COUNT2(obj);
 		return sjniObj(env, clsName, cls, obj);
 	}
@@ -748,7 +822,7 @@ public:
 	{
 		env = aEnv;
 		clsName = strdup("java/lang/String");
-		cls = env->FindClass(clsName); _SJNI_INC_REF_COUNT2(cls);
+		cls = env->FindClass(clsName); _SJNI_CNFE_Z(cls, clsName); _SJNI_INC_REF_COUNT2(cls);
 		obj = env->NewStringUTF(s); _SJNI_INC_REF_COUNT2(obj);
 		printf("String obj = 0x%08X (%s)\n", obj, s);
 	}
@@ -852,7 +926,7 @@ private:
 				char *buf = strdup(sig + 1);
 				buf[strlen(buf)-1] = 0;
 				jclass cls = env->FindClass(buf);
-				jmethodID ctorID = env->GetMethodID(cls, "<init>", psig);
+				jmethodID ctorID = env->GetMethodID(cls, "<init>", psig); _SJNI_MNFE_Z(ctorID, "<init>", sig, cls);
 				// va_list ap;
 				// va_start (ap, psig);
 				jobject init = env->NewObjectV(cls, ctorID, ap);
@@ -907,7 +981,7 @@ public:
 		char *buf = strdup(arySig), *bufp = buf;
 		while (*bufp == '[') bufp++;
 		bufp[strlen(bufp)-1] = 0;
-		jclass cls = env->FindClass(bufp); _SJNI_INC_REF_COUNT2(cls); // arySig + 1);
+		jclass cls = env->FindClass(bufp); _SJNI_CNFE_Z(cls, bufp); _SJNI_INC_REF_COUNT2(cls); // arySig + 1);
 		sjniObj o(env, arySig + 1, cls, getO(idx));
 		env->DeleteLocalRef(cls); _SJNI_DEC_REF_COUNT;
 		free(buf);

@@ -10,7 +10,7 @@ modification, are permitted provided that the following conditions are met:
     * Redistributions in binary form must reproduce the above copyright
       notice, this list of conditions and the following disclaimer in the
       documentation and/or other materials provided with the distribution.
-    * Neither the name of the Stanislaw Adaszewski nor the
+    * Neither the name of Stanislaw Adaszewski nor the
       names of any contributors may be used to endorse or promote products
       derived from this software without specific prior written permission.
 
@@ -56,7 +56,7 @@ sjniCall sjniObj::operator<< (jmethodID metID)
 	return sjniCall(env, obj, metID);
 } */
 
-sjniFld::sjniFld(JNIEnv *aEnv, /* const char *aClsName, jclass aCls, */ const char *name, const char *sig): obj(0), clsName(0), cls(0)
+sjniFld::sjniFld(JNIEnv *aEnv, /* const char *aClsName, */ jclass ownerCls, const char *name, const char *sig): obj(0), clsName(0), cls(0)
 {
 	env = aEnv;
 	if (sig[0] == 'L')
@@ -67,10 +67,10 @@ sjniFld::sjniFld(JNIEnv *aEnv, /* const char *aClsName, jclass aCls, */ const ch
 		cls = (jclass) env->NewLocalRef(clz.jcls()); _SJNI_INC_REF_COUNT2(cls);
 	}
 	// cls = aCls;
-	fieldID = env->GetFieldID(cls, name, sig);
+	fieldID = env->GetFieldID(ownerCls, name, sig); _SJNI_FNFE_Z(fieldID, name, sig, ownerCls);
 }
 
-sjniFld::sjniFld(JNIEnv *aEnv, /* const char *aClassName,  jclass aCls, */ jobject aObj, const char *name, const char *sig): clsName(0), cls(0)
+sjniFld::sjniFld(JNIEnv *aEnv, /* const char *aClassName, */ jclass ownerCls, jobject aObj, const char *name, const char *sig): clsName(0), cls(0)
 {
 	env = aEnv;
 	if (sig[0] == 'L')
@@ -81,7 +81,7 @@ sjniFld::sjniFld(JNIEnv *aEnv, /* const char *aClassName,  jclass aCls, */ jobje
 		cls = (jclass) env->NewLocalRef(clz.jcls()); _SJNI_INC_REF_COUNT2(cls);
 	}
 	// cls = aCls;
-	fieldID = env->GetFieldID(cls, name, sig);
+	fieldID = env->GetFieldID(ownerCls, name, sig); _SJNI_FNFE_Z(fieldID, name, sig, ownerCls);
 	obj = aObj;
 }
 
@@ -98,7 +98,7 @@ sjniSFld::sjniSFld(JNIEnv *aEnv, /* const char *aClsName, */ jclass aCls, const 
 		fieldCls = (jclass) env->NewLocalRef(clz.jcls()); _SJNI_INC_REF_COUNT2(fieldCls);
 	}
 	cls = (jclass) env->NewLocalRef(aCls); _SJNI_INC_REF_COUNT2(cls);
-	fieldID = env->GetStaticFieldID(cls, name, sig);
+	fieldID = env->GetStaticFieldID(cls, name, sig); _SJNI_FNFE_Z(fieldID, name, sig, cls);
 }
 
 sjniCall& sjniCall::operator<< (const sjniObj &aObj)
@@ -190,7 +190,7 @@ void sjniSCall::callA(sjniAry &aAry)
 	_exit(0);
 } */
 
-int main(int argc, char *argv)
+/* int main(int argc, char *argv)
 {
 	sjniEnv e(JNI_VERSION_1_6);
 	printf("vm = 0x%08X env = 0x%08X\n", e.jvm(), e.jenv());
@@ -211,4 +211,20 @@ int main(int argc, char *argv)
 	{
 		sleep(1);
 	}
+} */
+
+int main(int argc, char *argv[])
+{
+	sjniEnv e;
+	try
+	{
+		// sjniCls test1 = e.cls("there/is/no/such/class");
+		sjniCls test2 = e.cls("java/lang/System");
+		// (test2.sCall("noSuchMethod") << (jint) 1).callV();
+		test2.fld("noSuchField", "I") << (jint) 1;
+	} catch (sjniException e)
+	{
+		printf("Exception caught:\n\t%s\n", e.msg());
+	}
 }
+
