@@ -48,7 +48,11 @@ extern int _sjni_total_ref_count;
 
 #ifdef _WIN32
 #define strdup(x) _strdup(x)
-#endif
+
+#if !defined(_SJNI_JVM_MSVCR_DLL_)
+#define _SJNI_JVM_MSVCR_DLL_ "msvcr70.dll"
+#endif // _SJNI_JVM_MSVCR_DLL_
+#endif // _WIN32
 
 #define jtrue ((jboolean) true)
 #define jfalse ((jboolean) false)
@@ -80,6 +84,7 @@ public:
 	sjniException& operator= (const sjniException &other)
 	{
 		iMsg = strdup(other.iMsg);
+		return *this;
 	}
 	const char* msg() const
 	{
@@ -129,14 +134,32 @@ if (f == 0) {\
 #define _SJNI_CNFE_Z(c, name) { printf("Unable to find Java class ##name\n"); exit(-1); }
 #define _SJNI_MNFE_Z(m, name, sig, cname) { printf("Unable to find method ##name ##sig in class ##cname\n"); exit(-1); }
 #define _SJNI_FNFE_Z(f, name, sig, cname) { printf("Unable to find field ##name ##sig in class ##cname\n"); exit(-1); }
-#endif // _SJNI_EXCEPTIONS
+#endif // _SJNI_EXCEPTIONS_
+
+#if defined(_SJNI_EXCEPTIONS_) && defined(_SJNI_JAVA_EXCEPTIONS_)
+class sjniJavaException: public sjniException
+{
+public:
+	sjniJavaException(const char *aMsg): sjniException(aMsg) {}
+};
+
+#define _SJNI_CHECK_JVM_EXC sjniExceptionHelper::throwIfJavaExceptionOccured(env)
+
+class sjniExceptionHelper
+{
+public:
+	static void throwIfJavaExceptionOccured(JNIEnv *aEnv);
+};
+#else
+#define _SJNI_CHECK_JVM_EXC
+#endif // _SJNI_EXCEPTIONS_ && _SJNI_JAVA_EXCEPTIONS_
 
 class sjniMet
 {
 public:
 	sjniMet(JNIEnv *env, jclass cls, const char *name, const char *sig)
 	{
-		methodID = env->GetMethodID(cls, name, sig);
+		methodID = env->GetMethodID(cls, name, sig); _SJNI_MNFE_Z(methodID, name, sig, cls);
 	}
 
 	jmethodID jmet() { return methodID; }
@@ -161,37 +184,37 @@ public:
 		free(clsName);
 	}
 
-	sjniFld& operator>> (jboolean &z) { z = env->GetBooleanField(obj, fieldID); return *this; }
-	sjniFld& operator>> (jbyte &b) { b = env->GetByteField(obj, fieldID); return *this; }
-	sjniFld& operator>> (jchar &c) { c = env->GetCharField(obj, fieldID); return *this; }
-	sjniFld& operator>> (jshort &s) { s = env->GetShortField(obj, fieldID); return *this; }
-	sjniFld& operator>> (jint &i) { i = env->GetIntField(obj, fieldID); return *this; }
-	sjniFld& operator>> (jlong &l) { l = env->GetLongField(obj, fieldID); return *this; }
-	sjniFld& operator>> (jfloat &f) { f = env->GetFloatField(obj, fieldID); return *this; }
-	sjniFld& operator>> (jdouble &d) { d = env->GetDoubleField(obj, fieldID); return *this; }
-	sjniFld& operator>> (jobject &o) { o = env->GetObjectField(obj, fieldID); _SJNI_INC_REF_COUNT2(o); return *this; }
+	sjniFld& operator>> (jboolean &z) { z = env->GetBooleanField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator>> (jbyte &b) { b = env->GetByteField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator>> (jchar &c) { c = env->GetCharField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator>> (jshort &s) { s = env->GetShortField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator>> (jint &i) { i = env->GetIntField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator>> (jlong &l) { l = env->GetLongField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator>> (jfloat &f) { f = env->GetFloatField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator>> (jdouble &d) { d = env->GetDoubleField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator>> (jobject &o) { o = env->GetObjectField(obj, fieldID); _SJNI_CHECK_JVM_EXC; _SJNI_INC_REF_COUNT2(o); return *this; }
 	// sjniFld& operator>> (sjniObj &o) { o = sjniObj(env->GetObjectField(obj, fieldID)); return *this; }
 
-	sjniFld& operator<< (jboolean z) { env->SetBooleanField(obj, fieldID, z); return *this; }
-	sjniFld& operator<< (jbyte b) { env->SetByteField(obj, fieldID, b); return *this; }
-	sjniFld& operator<< (jchar c) { env->SetCharField(obj, fieldID, c); return *this; }
-	sjniFld& operator<< (jshort s) { env->SetShortField(obj, fieldID, s); return *this; }
-	sjniFld& operator<< (jint i) { env->SetIntField(obj, fieldID, i); return *this; }
-	sjniFld& operator<< (jlong l) { env->SetLongField(obj, fieldID, l); return *this; }
-	sjniFld& operator<< (jfloat f) { env->SetFloatField(obj, fieldID, f); return *this; }
-	sjniFld& operator<< (jdouble d) { env->SetDoubleField(obj, fieldID, d); return *this; }
-	sjniFld& operator<< (jobject o) { env->SetObjectField(obj, fieldID, o); return *this; }
+	sjniFld& operator<< (jboolean z) { env->SetBooleanField(obj, fieldID, z); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator<< (jbyte b) { env->SetByteField(obj, fieldID, b); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator<< (jchar c) { env->SetCharField(obj, fieldID, c); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator<< (jshort s) { env->SetShortField(obj, fieldID, s); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator<< (jint i) { env->SetIntField(obj, fieldID, i); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator<< (jlong l) { env->SetLongField(obj, fieldID, l); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator<< (jfloat f) { env->SetFloatField(obj, fieldID, f); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator<< (jdouble d) { env->SetDoubleField(obj, fieldID, d); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniFld& operator<< (jobject o) { env->SetObjectField(obj, fieldID, o); _SJNI_CHECK_JVM_EXC; return *this; }
 	// sjniFld& operator<< (const sjniObj &o) { env->SetObjectField(obj, fieldID, o.jobj()); return *this; }
 
-	jboolean getZ() { return env->GetBooleanField(obj, fieldID); }
-	jbyte getB() { return env->GetByteField(obj, fieldID); }
-	jchar getC() { return env->GetCharField(obj, fieldID); }
-	jshort getS() { return env->GetShortField(obj, fieldID); }
-	jint getI() { return env->GetIntField(obj, fieldID); }
-	jlong getL() { return env->GetLongField(obj, fieldID); }
-	jfloat getF() { return env->GetFloatField(obj, fieldID); }
-	jdouble getD() { return env->GetDoubleField(obj, fieldID); }
-	jobject getO() const { _SJNI_INC_REF_COUNT; return env->GetObjectField(obj, fieldID); }
+	jboolean getZ() { jboolean tmp = env->GetBooleanField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jbyte getB() { jbyte tmp = env->GetByteField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jchar getC() { jchar tmp = env->GetCharField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jshort getS() { jshort tmp = env->GetShortField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jint getI() { jint tmp = env->GetIntField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jlong getL() { jlong tmp = env->GetLongField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jfloat getF() { jfloat tmp = env->GetFloatField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jdouble getD() { jdouble tmp = env->GetDoubleField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jobject getO() const { _SJNI_INC_REF_COUNT; jobject tmp = env->GetObjectField(obj, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
 	// sjniObj getO() { return sjniObj(env->GetObjectField(obj, fieldID)); }
 
 	operator jboolean() { return getZ(); }
@@ -255,37 +278,37 @@ public:
 		obj = aObj;
 	} */
 
-	sjniSFld& operator>> (jboolean &z) { z = env->GetStaticBooleanField(cls, fieldID); return *this; }
-	sjniSFld& operator>> (jbyte &b) { b = env->GetStaticByteField(cls, fieldID); return *this; }
-	sjniSFld& operator>> (jchar &c) { c = env->GetStaticCharField(cls, fieldID); return *this; }
-	sjniSFld& operator>> (jshort &s) { s = env->GetStaticShortField(cls, fieldID); return *this; }
-	sjniSFld& operator>> (jint &i) { i = env->GetStaticIntField(cls, fieldID); return *this; }
-	sjniSFld& operator>> (jlong &l) { l = env->GetStaticLongField(cls, fieldID); return *this; }
-	sjniSFld& operator>> (jfloat &f) { f = env->GetStaticFloatField(cls, fieldID); return *this; }
-	sjniSFld& operator>> (jdouble &d) { d = env->GetStaticDoubleField(cls, fieldID); return *this; }
-	sjniSFld& operator>> (jobject &o) { o = env->GetStaticObjectField(cls, fieldID); _SJNI_INC_REF_COUNT2(o); return *this; }
+	sjniSFld& operator>> (jboolean &z) { z = env->GetStaticBooleanField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator>> (jbyte &b) { b = env->GetStaticByteField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator>> (jchar &c) { c = env->GetStaticCharField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator>> (jshort &s) { s = env->GetStaticShortField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator>> (jint &i) { i = env->GetStaticIntField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator>> (jlong &l) { l = env->GetStaticLongField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator>> (jfloat &f) { f = env->GetStaticFloatField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator>> (jdouble &d) { d = env->GetStaticDoubleField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator>> (jobject &o) { o = env->GetStaticObjectField(cls, fieldID); _SJNI_CHECK_JVM_EXC; _SJNI_INC_REF_COUNT2(o); return *this; }
 	// sjniFld& operator>> (sjniObj &o) { o = sjniObj(env->GetObjectField(obj, fieldID)); return *this; }
 
-	sjniSFld& operator<< (jboolean z) { env->SetStaticBooleanField(cls, fieldID, z); return *this; }
-	sjniSFld& operator<< (jbyte b) { env->SetStaticByteField(cls, fieldID, b); return *this; }
-	sjniSFld& operator<< (jchar c) { env->SetStaticCharField(cls, fieldID, c); return *this; }
-	sjniSFld& operator<< (jshort s) { env->SetStaticShortField(cls, fieldID, s); return *this; }
-	sjniSFld& operator<< (jint i) { env->SetStaticIntField(cls, fieldID, i); return *this; }
-	sjniSFld& operator<< (jlong l) { env->SetStaticLongField(cls, fieldID, l); return *this; }
-	sjniSFld& operator<< (jfloat f) { env->SetStaticFloatField(cls, fieldID, f); return *this; }
-	sjniSFld& operator<< (jdouble d) { env->SetStaticDoubleField(cls, fieldID, d); return *this; }
-	sjniSFld& operator<< (jobject o) { env->SetStaticObjectField(cls, fieldID, o); return *this; }
+	sjniSFld& operator<< (jboolean z) { env->SetStaticBooleanField(cls, fieldID, z); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator<< (jbyte b) { env->SetStaticByteField(cls, fieldID, b); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator<< (jchar c) { env->SetStaticCharField(cls, fieldID, c); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator<< (jshort s) { env->SetStaticShortField(cls, fieldID, s); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator<< (jint i) { env->SetStaticIntField(cls, fieldID, i); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator<< (jlong l) { env->SetStaticLongField(cls, fieldID, l); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator<< (jfloat f) { env->SetStaticFloatField(cls, fieldID, f); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator<< (jdouble d) { env->SetStaticDoubleField(cls, fieldID, d); _SJNI_CHECK_JVM_EXC; return *this; }
+	sjniSFld& operator<< (jobject o) { env->SetStaticObjectField(cls, fieldID, o); _SJNI_CHECK_JVM_EXC; return *this; }
 	// sjniFld& operator<< (const sjniObj &o) { env->SetObjectField(obj, fieldID, o.jobj()); return *this; }
 
-	jboolean getZ() { return env->GetStaticBooleanField(cls, fieldID); }
-	jbyte getB() { return env->GetStaticByteField(cls, fieldID); }
-	jchar getC() { return env->GetStaticCharField(cls, fieldID); }
-	jshort getS() { return env->GetStaticShortField(cls, fieldID); }
-	jint getI() { return env->GetStaticIntField(cls, fieldID); }
-	jlong getL() { return env->GetStaticLongField(cls, fieldID); }
-	jfloat getF() { return env->GetStaticFloatField(cls, fieldID); }
-	jdouble getD() { return env->GetStaticDoubleField(cls, fieldID); }
-	jobject getO() const { jobject o = env->GetStaticObjectField(cls, fieldID); _SJNI_INC_REF_COUNT2(o); return o; }
+	jboolean getZ() { jboolean tmp = env->GetStaticBooleanField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jbyte getB() { jbyte tmp = env->GetStaticByteField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jchar getC() { jchar tmp = env->GetStaticCharField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jshort getS() { jshort tmp = env->GetStaticShortField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jint getI() { jint tmp = env->GetStaticIntField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jlong getL() { jlong tmp = env->GetStaticLongField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jfloat getF() { jfloat tmp = env->GetStaticFloatField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jdouble getD() { jdouble tmp = env->GetStaticDoubleField(cls, fieldID); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jobject getO() const { jobject o = env->GetStaticObjectField(cls, fieldID); _SJNI_CHECK_JVM_EXC; _SJNI_INC_REF_COUNT2(o); return o; }
 	// sjniObj getO() { return sjniObj(env->GetObjectField(obj, fieldID)); }
 
 	operator jboolean() { return getZ(); }
@@ -370,16 +393,16 @@ public:
 	sjniCall& operator<< (const sjniObj &aObj);
 	sjniCall& operator<< (const sjniAry &aAry);
 
-	virtual void callV() { prepMethodID("V"); return env->CallVoidMethodA(obj, methodID, args); }
-	virtual jboolean callZ() { prepMethodID("Z"); return env->CallBooleanMethodA(obj, methodID, args); }
-	virtual jbyte callB() { prepMethodID("B"); return env->CallByteMethodA(obj, methodID, args); }
-	virtual jchar callC() { prepMethodID("C"); return env->CallCharMethodA(obj, methodID, args); }
-	virtual jshort callS() { prepMethodID("S"); return env->CallShortMethodA(obj, methodID, args); }
-	virtual jint callI() { prepMethodID("I"); return env->CallIntMethodA(obj, methodID, args); }
-	virtual jlong callL() { prepMethodID("J"); return env->CallLongMethodA(obj, methodID, args); }
-	virtual jfloat callF() { prepMethodID("F"); return env->CallFloatMethodA(obj, methodID, args); }
-	virtual jdouble callD() { prepMethodID("D"); return env->CallDoubleMethodA(obj, methodID, args); }
-	virtual jobject callO(const char *clz) { prepMethodID("L", clz); jobject o = env->CallObjectMethodA(obj, methodID, args); _SJNI_INC_REF_COUNT2(o); return o; }
+	virtual void callV() { prepMethodID("V"); env->CallVoidMethodA(obj, methodID, args); _SJNI_CHECK_JVM_EXC; }
+	virtual jboolean callZ() { prepMethodID("Z"); jboolean tmp = env->CallBooleanMethodA(obj, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	virtual jbyte callB() { prepMethodID("B"); jbyte tmp = env->CallByteMethodA(obj, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	virtual jchar callC() { prepMethodID("C"); jchar tmp = env->CallCharMethodA(obj, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	virtual jshort callS() { prepMethodID("S"); jshort tmp = env->CallShortMethodA(obj, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	virtual jint callI() { prepMethodID("I"); jint tmp = env->CallIntMethodA(obj, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	virtual jlong callL() { prepMethodID("J"); jlong tmp = env->CallLongMethodA(obj, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	virtual jfloat callF() { prepMethodID("F"); jfloat tmp = env->CallFloatMethodA(obj, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	virtual jdouble callD() { prepMethodID("D"); jdouble tmp = env->CallDoubleMethodA(obj, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	virtual jobject callO(const char *clz) { prepMethodID("L", clz); jobject o = env->CallObjectMethodA(obj, methodID, args); _SJNI_CHECK_JVM_EXC; _SJNI_INC_REF_COUNT2(o); return o; }
 	virtual void callO(const char *clz, sjniObj &);
 	virtual void callA(sjniAry&);
 	// sjniObj callO(const char *clz) { prepMethodID("L", clz); env->CallObjectMethod(obj, methodID, args); }
@@ -498,16 +521,16 @@ public:
 		methodID = metID;
 	}
 
-	void callV() { prepMethodID("V"); return env->CallStaticVoidMethodA(cls, methodID, args); }
-	jboolean callZ() { prepMethodID("Z"); return env->CallStaticBooleanMethodA(cls, methodID, args); }
-	jbyte callB() { prepMethodID("B"); return env->CallStaticByteMethodA(cls, methodID, args); }
-	jchar callC() { prepMethodID("C"); return env->CallStaticCharMethodA(cls, methodID, args); }
-	jshort callS() { prepMethodID("S"); return env->CallStaticShortMethodA(cls, methodID, args); }
-	jint callI() { prepMethodID("I"); return env->CallStaticIntMethodA(cls, methodID, args); }
-	jlong callL() { prepMethodID("J"); return env->CallStaticLongMethodA(cls, methodID, args); }
-	jfloat callF() { prepMethodID("F"); return env->CallStaticFloatMethodA(cls, methodID, args); }
-	jdouble callD() { prepMethodID("D"); return env->CallStaticDoubleMethodA(cls, methodID, args); }
-	jobject callO(const char *clz) { prepMethodID("L", clz); jobject o = env->CallStaticObjectMethodA(cls, methodID, args); _SJNI_INC_REF_COUNT2(o); return o; }
+	void callV() { prepMethodID("V"); env->CallStaticVoidMethodA(cls, methodID, args); _SJNI_CHECK_JVM_EXC; }
+	jboolean callZ() { prepMethodID("Z"); jboolean tmp = env->CallStaticBooleanMethodA(cls, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jbyte callB() { prepMethodID("B"); jbyte tmp = env->CallStaticByteMethodA(cls, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jchar callC() { prepMethodID("C"); jchar tmp = env->CallStaticCharMethodA(cls, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jshort callS() { prepMethodID("S"); jshort tmp = env->CallStaticShortMethodA(cls, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jint callI() { prepMethodID("I"); jint tmp = env->CallStaticIntMethodA(cls, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jlong callL() { prepMethodID("J"); jlong tmp = env->CallStaticLongMethodA(cls, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jfloat callF() { prepMethodID("F"); jfloat tmp = env->CallStaticFloatMethodA(cls, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jdouble callD() { prepMethodID("D"); jdouble tmp = env->CallStaticDoubleMethodA(cls, methodID, args); _SJNI_CHECK_JVM_EXC; return tmp; }
+	jobject callO(const char *clz) { prepMethodID("L", clz); jobject o = env->CallStaticObjectMethodA(cls, methodID, args); _SJNI_CHECK_JVM_EXC; _SJNI_INC_REF_COUNT2(o); return o; }
 	void callO(const char *clz, sjniObj &);
 	void callA(sjniAry&);
 	// sjniObj callO(const char *clz) { prepMethodID("L", clz); env->CallObjectMethod(obj, methodID, args); }
@@ -823,7 +846,7 @@ public:
 		env = aEnv;
 		clsName = strdup("java/lang/String");
 		cls = env->FindClass(clsName); _SJNI_CNFE_Z(cls, clsName); _SJNI_INC_REF_COUNT2(cls);
-		obj = env->NewStringUTF(s); _SJNI_INC_REF_COUNT2(obj);
+		obj = env->NewStringUTF(s); _SJNI_CHECK_JVM_EXC; _SJNI_INC_REF_COUNT2(obj);
 		printf("String obj = 0x%08X (%s)\n", obj, s);
 	}
 
@@ -929,9 +952,9 @@ private:
 				jmethodID ctorID = env->GetMethodID(cls, "<init>", psig); _SJNI_MNFE_Z(ctorID, "<init>", sig, cls);
 				// va_list ap;
 				// va_start (ap, psig);
-				jobject init = env->NewObjectV(cls, ctorID, ap);
+				jobject init = env->NewObjectV(cls, ctorID, ap); _SJNI_CHECK_JVM_EXC;
 				// va_end(ap);
-				obj = env->NewObjectArray(len, cls, init);
+				obj = env->NewObjectArray(len, cls, init); _SJNI_CHECK_JVM_EXC;
 
 				char *buf2 = (char*) calloc(strlen(sig) + 2, 1);
 				strcat(buf2, "[");
@@ -949,6 +972,7 @@ private:
 			return;
 		}
 		{
+			_SJNI_CHECK_JVM_EXC;
 			_SJNI_INC_REF_COUNT2(obj);
 			// char buf[3];
 			arySig = (char*) malloc(3);
@@ -967,15 +991,15 @@ public:
 		if (obj) { env->DeleteLocalRef(obj); _SJNI_DEC_REF_COUNT; }
 	}
 
-	jboolean getZ(int idx) { jboolean buf; env->GetBooleanArrayRegion((jbooleanArray) obj, idx, 1, &buf); return buf; }
-	jbyte getB(int idx) { jbyte buf; env->GetByteArrayRegion((jbyteArray) obj, idx, 1, &buf); return buf; }
-	jchar getC(int idx) { jchar buf; env->GetCharArrayRegion((jcharArray) obj, idx, 1, &buf); return buf; }
-	jshort getS(int idx) { jshort buf; env->GetShortArrayRegion((jshortArray) obj, idx, 1, &buf); return buf; }
-	jint getI(int idx) { jint buf; env->GetIntArrayRegion((jintArray) obj, idx, 1, &buf); return buf; }
-	jlong getL(int idx) { jlong buf; env->GetLongArrayRegion((jlongArray) obj, idx, 1, &buf); return buf; }
-	jfloat getF(int idx) { jfloat buf; env->GetFloatArrayRegion((jfloatArray) obj, idx, 1, &buf); return buf; }
-	jdouble getD(int idx) { jdouble buf; env->GetDoubleArrayRegion((jdoubleArray) obj, idx, 1, &buf); return buf; }
-	jobject getO(int idx) { jobject o = env->GetObjectArrayElement((jobjectArray) obj, idx); _SJNI_INC_REF_COUNT2(o); return o; } // , 1, &buf); return buf; }
+	jboolean getZ(int idx) { jboolean buf; env->GetBooleanArrayRegion((jbooleanArray) obj, idx, 1, &buf); _SJNI_CHECK_JVM_EXC; return buf; }
+	jbyte getB(int idx) { jbyte buf; env->GetByteArrayRegion((jbyteArray) obj, idx, 1, &buf); _SJNI_CHECK_JVM_EXC; return buf; }
+	jchar getC(int idx) { jchar buf; env->GetCharArrayRegion((jcharArray) obj, idx, 1, &buf); _SJNI_CHECK_JVM_EXC; return buf; }
+	jshort getS(int idx) { jshort buf; env->GetShortArrayRegion((jshortArray) obj, idx, 1, &buf); _SJNI_CHECK_JVM_EXC; return buf; }
+	jint getI(int idx) { jint buf; env->GetIntArrayRegion((jintArray) obj, idx, 1, &buf); _SJNI_CHECK_JVM_EXC; return buf; }
+	jlong getL(int idx) { jlong buf; env->GetLongArrayRegion((jlongArray) obj, idx, 1, &buf); _SJNI_CHECK_JVM_EXC; return buf; }
+	jfloat getF(int idx) { jfloat buf; env->GetFloatArrayRegion((jfloatArray) obj, idx, 1, &buf); _SJNI_CHECK_JVM_EXC; return buf; }
+	jdouble getD(int idx) { jdouble buf; env->GetDoubleArrayRegion((jdoubleArray) obj, idx, 1, &buf); _SJNI_CHECK_JVM_EXC; return buf; }
+	jobject getO(int idx) { jobject o = env->GetObjectArrayElement((jobjectArray) obj, idx); _SJNI_INC_REF_COUNT2(o); _SJNI_CHECK_JVM_EXC; return o; } // , 1, &buf); return buf; }
 	sjniObj getSO(int idx)
 	{
 		char *buf = strdup(arySig), *bufp = buf;
@@ -988,15 +1012,15 @@ public:
 		return o;
 	}
 
-	void set(int idx, jboolean z) { env->SetBooleanArrayRegion((jbooleanArray) obj, idx, 1, &z); }
-	void set(int idx, jbyte b) { env->SetByteArrayRegion((jbyteArray) obj, idx, 1, &b); }
-	void set(int idx, jchar c) { env->SetCharArrayRegion((jcharArray) obj, idx, 1, &c); }
-	void set(int idx, jshort s) { env->SetShortArrayRegion((jshortArray) obj, idx, 1, &s); }
-	void set(int idx, jint i) { env->SetIntArrayRegion((jintArray) obj, idx, 1, &i); }
-	void set(int idx, jlong l) { env->SetLongArrayRegion((jlongArray) obj, idx, 1, &l); }
-	void set(int idx, jfloat f) { env->SetFloatArrayRegion((jfloatArray) obj, idx, 1, &f); }
-	void set(int idx, jdouble d) { env->SetDoubleArrayRegion((jdoubleArray) obj, idx, 1, &d); }
-	void set(int idx, jobject o) { env->SetObjectArrayElement((jobjectArray) obj, idx, o); }
+	void set(int idx, jboolean z) { env->SetBooleanArrayRegion((jbooleanArray) obj, idx, 1, &z); _SJNI_CHECK_JVM_EXC; }
+	void set(int idx, jbyte b) { env->SetByteArrayRegion((jbyteArray) obj, idx, 1, &b); _SJNI_CHECK_JVM_EXC; }
+	void set(int idx, jchar c) { env->SetCharArrayRegion((jcharArray) obj, idx, 1, &c); _SJNI_CHECK_JVM_EXC; }
+	void set(int idx, jshort s) { env->SetShortArrayRegion((jshortArray) obj, idx, 1, &s); _SJNI_CHECK_JVM_EXC; }
+	void set(int idx, jint i) { env->SetIntArrayRegion((jintArray) obj, idx, 1, &i); _SJNI_CHECK_JVM_EXC; }
+	void set(int idx, jlong l) { env->SetLongArrayRegion((jlongArray) obj, idx, 1, &l); _SJNI_CHECK_JVM_EXC; }
+	void set(int idx, jfloat f) { env->SetFloatArrayRegion((jfloatArray) obj, idx, 1, &f); _SJNI_CHECK_JVM_EXC; }
+	void set(int idx, jdouble d) { env->SetDoubleArrayRegion((jdoubleArray) obj, idx, 1, &d); _SJNI_CHECK_JVM_EXC; }
+	void set(int idx, jobject o) { env->SetObjectArrayElement((jobjectArray) obj, idx, o); _SJNI_CHECK_JVM_EXC; }
 
 	sjniAry& operator<< (jboolean z) { set(curIdx, z); curIdx++; return *this; }
 	sjniAry& operator<< (jbyte b) { set(curIdx, b); curIdx++; return *this; }
@@ -1011,7 +1035,7 @@ public:
 
 	void setCurIdx(int idx) { curIdx = idx; }
 
-	jsize len() { return env->GetArrayLength((jarray) obj); }
+	jsize len() { jsize tmp = env->GetArrayLength((jarray) obj); _SJNI_CHECK_JVM_EXC; return tmp; }
 
 	JNIEnv* jenv() const { return env; }
 	jobject jobj() const { return obj; }
@@ -1223,6 +1247,8 @@ public:
 		return sjniObj();
 	}
 
+	static void jfree(void*);
+
 	JavaVM *jvm() const { return vm; }
 	JNIEnv* jenv() const { return env; }
 
@@ -1233,5 +1259,28 @@ private:
 	JavaVM *vm;
 	JNIEnv *env;
 };
+
+#if defined(_SJNI_EXCEPTIONS_) && defined(_SJNI_JAVA_EXCEPTIONS_)
+void sjniExceptionHelper::throwIfJavaExceptionOccured(JNIEnv *aEnv)
+{
+	jthrowable exc = aEnv->ExceptionOccurred(); _SJNI_INC_REF_COUNT2(exc);
+	if (exc)
+	{
+#if defined(_SJNI_DESCRIBE_JAVA_EXCEPTIONS_)
+		aEnv->ExceptionDescribe();
+#endif // _SJNI_DESCRIBE_JAVA_EXCEPTIONS_
+		aEnv->ExceptionClear();
+		printf("exc = 0x%08X\n", exc);
+		sjniObj excObj(aEnv, "Ljava/lang/Throwable;", exc);
+		sjniObj msgObj;
+		(excObj << "getMessage").callO("java/lang/String", msgObj);
+		jboolean isCopy;
+		const char *msgChars = aEnv->GetStringUTFChars((jstring) msgObj.jobj(), &isCopy);
+		sjniException e(msgChars);
+		if (isCopy) sjniEnv::jfree((void*) msgChars);
+		throw e;
+	}
+}
+#endif // defined(_SJNI_EXCEPTIONS) && defined(_SJNI_JAVA_EXCEPTIONS_)
 
 #endif // _SJNI_H_

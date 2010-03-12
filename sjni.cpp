@@ -126,7 +126,7 @@ void sjniCall::callO(const char *clz, sjniObj &aObj)
 void sjniCall::callA(sjniAry &aAry)
 {
 	prepMethodID(aAry.sig()); // "[", aAry.sig());
-	jobject aryObj = env->CallObjectMethodA(obj, methodID, args); _SJNI_INC_REF_COUNT2(aryObj);
+	jobject aryObj = env->CallObjectMethodA(obj, methodID, args); _SJNI_CHECK_JVM_EXC; _SJNI_INC_REF_COUNT2(aryObj);
 	aAry.receiveObject(env, aryObj);
 }
 
@@ -139,11 +139,29 @@ void sjniSCall::callO(const char *clz, sjniObj &aObj)
 void sjniSCall::callA(sjniAry &aAry)
 {
 	prepMethodID(aAry.sig()); // "[", aAry.sig());
-	jobject aryObj = env->CallStaticObjectMethodA(cls, methodID, args); _SJNI_INC_REF_COUNT2(aryObj);
+	jobject aryObj = env->CallStaticObjectMethodA(cls, methodID, args); _SJNI_CHECK_JVM_EXC; _SJNI_INC_REF_COUNT2(aryObj);
 	aAry.receiveObject(env, aryObj);
 }
 
-/* int main(int argc, char *argv[])
+void sjniEnv::jfree(void *mem)
+{
+#if defined(_WIN32)
+	static int been_here(0);
+	static HANDLE hMsvcrDll;
+	static void (*free_from_jvm_msvcr)(void*);
+	if (!been_here)
+	{
+		hMsvcrDll = LoadLibrary(_SJNI_JVM_MSVCR_DLL_);
+		free_from_jvm_msvcr = (void(*)(void*)) GetProcAddress(hMsvcrDll, "free");
+	}
+	free_from_jvm_msvcr(mem);
+#else
+	free(mem);
+#endif // _WIN32
+}
+
+#if defined(_SJNI_UNIT_1_)
+int main(int argc, char *argv[])
 {
 	sjniEnv e;
 	sjniCls System = e.cls("java/lang/System");
@@ -188,9 +206,11 @@ void sjniSCall::callA(sjniAry &aAry)
 
 	e.destroy();
 	_exit(0);
-} */
+}
+#endif // _SJNI_UNIT_1_
 
-/* int main(int argc, char *argv)
+#if defined(_SJNI_UNIT_2_)
+int main(int argc, char *argv)
 {
 	sjniEnv e(JNI_VERSION_1_6);
 	printf("vm = 0x%08X env = 0x%08X\n", e.jvm(), e.jenv());
@@ -211,8 +231,10 @@ void sjniSCall::callA(sjniAry &aAry)
 	{
 		sleep(1);
 	}
-} */
+}
+#endif // _SJNI_UNIT_2_
 
+#if defined(_SJNI_UNIT_3_)
 int main(int argc, char *argv[])
 {
 	sjniEnv e;
@@ -221,10 +243,32 @@ int main(int argc, char *argv[])
 		// sjniCls test1 = e.cls("there/is/no/such/class");
 		sjniCls test2 = e.cls("java/lang/System");
 		// (test2.sCall("noSuchMethod") << (jint) 1).callV();
+		sjniSFld fld = test2.sfld("out", "Ljava/io/PrintStream;");
 		test2.fld("noSuchField", "I") << (jint) 1;
 	} catch (sjniException e)
 	{
 		printf("Exception caught:\n\t%s\n", e.msg());
 	}
+	printf("_sjni_total_ref_count = %d\n", _sjni_total_ref_count);
 }
+#endif // _SJNI_UNIT_3_
 
+#if defined(_SJNI_UNIT_4_)
+int main(int argc, char *argv[])
+{
+	sjniEnv e;
+	try
+	{
+		sjniCls System = e.cls("java/lang/System");
+		sjniObj out = sjniObj(System.sfld("out", "Ljava/io/PrintStream;"));
+		// (out << "println" << sjniObj(e.jenv(), "java/lang/String", (jobject) 0)).callV();
+		sjniObj exc = e.nnew("java/lang/Exception", "(Ljava/lang/String;)V", e.str("Whazaaa").jobj());
+		e.jenv()->Throw((jthrowable) exc.jobj());
+		sjniExceptionHelper::throwIfJavaExceptionOccured(e.jenv());
+	} catch (sjniException e)
+	{
+		printf("Exception caught:\n\t%s\n", e.msg());
+	}
+	printf("_sjni_total_ref_count = %d\n", _sjni_total_ref_count);
+}
+#endif // _SJNI_UNIT_4_
